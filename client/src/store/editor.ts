@@ -401,3 +401,6 @@ export const useEditor = create<EditorState>((set, get) => {
     },
   };
 });
+
+// Exposed in development for debugging and browser tests.
+if (import.meta.env.DEV) (window as unknown as { __editor: typeof useEditor }).__editor = useEditor;

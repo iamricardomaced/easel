@@ -13,10 +13,11 @@ import { useBrandKit } from '../store/brand';
 import { ColorPicker } from '../components/ui';
 import { DEFAULT_COLORS } from '../lib/presets';
 import { FONTS } from '../lib/fonts';
+import { useUi, CONTEXT_PANELS, type PanelId } from '../store/ui';
+import { ContextPanel, LayersList } from './ContextPanels';
 
 const IconSearch = lazy(() => import('./IconSearch'));
 
-type PanelId = 'templates' | 'elements' | 'text' | 'brand' | 'uploads' | 'photos' | 'draw' | 'layers' | 'charts';
 
 const TABS: { id: PanelId; label: string; icon: ReactNode }[] = [
   { id: 'templates', label: 'Templates', icon: <LayoutTemplate size={20} /> },
@@ -31,8 +32,14 @@ const TABS: { id: PanelId; label: string; icon: ReactNode }[] = [
 ];
 
 export function Sidebar() {
-  const [panel, setPanel] = useState<PanelId | null>('templates');
+  const panel = useUi((s) => s.panel);
+  const setPanel = useUi((s) => s.setPanel);
   const setTool = useEditor((s) => s.setTool);
+  const hasSelection = useEditor((s) => s.selectedIds.length > 0);
+  // Contextual panels belong to a selection; close them when it goes away.
+  useEffect(() => {
+    if (!hasSelection && panel && CONTEXT_PANELS.includes(panel) && panel !== 'position') setPanel(null);
+  }, [hasSelection, panel, setPanel]);
   return (
     <div className="flex h-full shrink-0">
       <nav className="flex w-[72px] flex-col items-center gap-1 bg-white border-r py-2">
@@ -62,7 +69,13 @@ export function Sidebar() {
             {panel === 'photos' && <PhotosPanel />}
             {panel === 'charts' && <ChartsPanel />}
             {panel === 'draw' && <DrawPanel />}
-            {panel === 'layers' && <LayersPanel />}
+            {panel === 'layers' && (
+              <>
+                <H>Layers</H>
+                <LayersList />
+              </>
+            )}
+            {CONTEXT_PANELS.includes(panel) && <ContextPanel panel={panel} />}
           </div>
         </div>
       )}
@@ -485,59 +498,6 @@ function DrawPanel() {
       <H>Weight</H>
       <input type="range" min={1} max={60} value={penWidth} onChange={(e) => setPen(undefined, Number(e.target.value))} className="w-full accent-brand" />
       <p className="mt-3 text-xs text-gray-500">Draw directly on the page. The eraser removes whole strokes.</p>
-    </>
-  );
-}
-
-function LayersPanel() {
-  const page = useEditor((s) => s.page());
-  const selectedIds = useEditor((s) => s.selectedIds);
-  const s = useEditor.getState();
-  const [dragId, setDragId] = useState<string | null>(null);
-  const items = [...page.elements].reverse();
-  const label = (el: DesignElement) =>
-    el.name ||
-    (el.type === 'text'
-      ? el.text.slice(0, 30) || 'Text'
-      : el.type === 'shape'
-        ? `Shape · ${el.shape}`
-        : el.type === 'icon'
-          ? `Icon · ${el.icon}`
-          : el.type[0].toUpperCase() + el.type.slice(1));
-  return (
-    <>
-      <H>Layers</H>
-      {!items.length && <p className="text-xs text-gray-500">This page is empty.</p>}
-      <div className="space-y-1">
-        {items.map((el) => (
-          <div
-            key={el.id}
-            draggable
-            onDragStart={() => setDragId(el.id)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => {
-              if (!dragId || dragId === el.id) return;
-              s.moveLayer(dragId, page.elements.findIndex((x) => x.id === el.id));
-              setDragId(null);
-            }}
-            onClick={(e) => s.select([el.id], e.shiftKey)}
-            className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-2 text-sm ${selectedIds.includes(el.id) ? 'border-brand bg-brand/5' : 'hover:bg-gray-50'}`}
-          >
-            <span className="cursor-grab text-gray-400">⋮⋮</span>
-            <span className="flex-1 truncate">{label(el)}</span>
-            {el.groupId && <span className="rounded bg-gray-100 px-1 text-[10px] text-gray-500">group</span>}
-            <button
-              className="text-xs text-gray-500 hover:text-gray-900"
-              onClick={(e) => {
-                e.stopPropagation();
-                s.updateElement(el.id, { locked: !el.locked });
-              }}
-            >
-              {el.locked ? '🔒' : '🔓'}
-            </button>
-          </div>
-        ))}
-      </div>
     </>
   );
 }

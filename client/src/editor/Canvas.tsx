@@ -6,6 +6,7 @@ import { elementAABB, intersects, resizeBox, selectionBox, snapBox, type Box, ty
 import { makeDraw, makeImage } from '../lib/factory';
 import { uploadImageFile } from '../lib/upload';
 import { ContextMenu } from './ContextMenu';
+import { useUi } from '../store/ui';
 
 const EMPTY: string[] = [];
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -607,6 +608,7 @@ function ElementNode({
   onHover: (id: string | null) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const preview = useUi((s) => (s.preview?.id === el.id ? s.preview : null));
 
   // Text boxes grow with their content; keep the stored height in sync.
   useLayoutEffect(() => {
@@ -628,7 +630,7 @@ function ElementNode({
     const ro = new ResizeObserver(sync);
     ro.observe(node);
     return () => ro.disconnect();
-  }, [el.type, el.id, index]);
+  }, [el.type, el.id, el.h, index]);
 
   return (
     <div
@@ -639,6 +641,14 @@ function ElementNode({
       onPointerEnter={() => onHover(el.id)}
       onPointerLeave={() => onHover(null)}
     >
+      <div
+        key={preview?.nonce ?? 0}
+        style={{
+          width: '100%',
+          height: el.type === 'text' ? 'auto' : '100%',
+          animation: preview ? `anim-${preview.kind} 700ms both cubic-bezier(.2,.8,.2,1)` : undefined,
+        }}
+      >
       {editing && el.type === 'text' ? (
         <TextEditor el={el} />
       ) : editing && el.type === 'shape' ? (
@@ -658,6 +668,7 @@ function ElementNode({
           }}
         />
       )}
+      </div>
     </div>
   );
 }

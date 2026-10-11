@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import {
-  AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Bold, CaseUpper, ChevronDown,
+  AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, CaseUpper, ChevronDown,
   Copy, FlipHorizontal2, FlipVertical2, Group, Italic, List, ListOrdered, Lock, LockOpen, Minus, Plus,
   Strikethrough, Trash2, Underline, Ungroup,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useEditor } from '../store/editor';
+import { useUi, type PanelId } from '../store/ui';
 import type {
-  AnimationKind, ChartElement, DesignElement, DrawElement, IconElement, ImageElement, LineElement, QrElement,
+  ChartElement, DesignElement, DrawElement, IconElement, ImageElement, LineElement, QrElement,
   ShapeElement, TableElement, TextElement,
 } from '../types';
 import { ColorButton, ColorPicker, Popover, Slider, ToolButton } from '../components/ui';
@@ -145,27 +146,7 @@ function TextTools({ el }: { el: TextElement }) {
         <Slider label="Letter spacing" value={el.letterSpacing} min={-10} max={60} step={0.5} onStart={start} onChange={(v) => live({ letterSpacing: v })} />
         <Slider label="Line height" value={el.lineHeight} min={0.5} max={3} step={0.05} onStart={start} onChange={(v) => live({ lineHeight: v })} />
       </Popover>
-      <Popover title="Effects" width={280} trigger={() => <ToolButton title="Effects">Effects</ToolButton>}>
-        <div className="grid grid-cols-3 gap-2">
-          {(['none', 'lift', 'hollow', 'outline', 'neon'] as const).map((fx) => (
-            <button
-              key={fx}
-              className={`rounded-lg border p-2 text-sm capitalize ${el.effect === fx || (!el.effect && fx === 'none') ? 'border-brand bg-brand/5' : ''}`}
-              onClick={() => set({ effect: fx })}
-            >
-              {fx}
-            </button>
-          ))}
-          <button className={`rounded-lg border p-2 text-sm ${el.background ? 'border-brand bg-brand/5' : ''}`} onClick={() => set({ background: el.background ? undefined : '#ffde59' })}>
-            Background
-          </button>
-        </div>
-        {el.background && (
-          <div className="mt-3">
-            <ColorPicker value={el.background} onChange={(c) => set({ background: c })} />
-          </div>
-        )}
-      </Popover>
+      <PanelButton panel="effects" title="Text effects and shadow">Effects</PanelButton>
     </>
   );
 }
@@ -217,49 +198,10 @@ function ShapeTools({ el }: { el: ShapeElement }) {
   );
 }
 
-const FILTER_PRESETS: { name: string; f: Partial<ImageElement['filters']> }[] = [
-  { name: 'None', f: { brightness: 100, contrast: 100, saturation: 100, grayscale: 0, sepia: 0, hue: 0, blur: 0 } },
-  { name: 'Mono', f: { grayscale: 100, contrast: 110 } },
-  { name: 'Vintage', f: { sepia: 50, contrast: 90, saturation: 80 } },
-  { name: 'Vivid', f: { saturation: 160, contrast: 115 } },
-  { name: 'Fade', f: { contrast: 80, brightness: 110, saturation: 80 } },
-  { name: 'Cool', f: { hue: 200, saturation: 90 } },
-  { name: 'Warm', f: { sepia: 25, saturation: 130 } },
-  { name: 'Drama', f: { contrast: 150, brightness: 90, saturation: 70 } },
-];
-
 function ImageTools({ el, cropping }: { el: ImageElement; cropping: boolean }) {
-  const f = el.filters;
-  const setF = (patch: Partial<ImageElement['filters']>) => live((e) => ({ filters: { ...(e as ImageElement).filters, ...patch } }));
   return (
     <>
-      <Popover title="Edit photo" width={300} trigger={() => <ToolButton title="Edit photo">Edit photo</ToolButton>}>
-        <div className="mb-3 grid grid-cols-4 gap-2">
-          {FILTER_PRESETS.map((p) => (
-            <button
-              key={p.name}
-              className="flex flex-col items-center gap-1 text-[11px]"
-              onClick={() => set((e) => ({ filters: { ...FILTER_PRESETS[0].f, ...(e as ImageElement).filters, ...FILTER_PRESETS[0].f, ...p.f } as ImageElement['filters'] }))}
-            >
-              <img
-                src={el.src}
-                crossOrigin="anonymous"
-                alt=""
-                className="h-12 w-12 rounded object-cover"
-                style={{ filter: `grayscale(${p.f.grayscale ?? 0}%) sepia(${p.f.sepia ?? 0}%) saturate(${p.f.saturation ?? 100}%) contrast(${p.f.contrast ?? 100}%) hue-rotate(${p.f.hue ?? 0}deg)` }}
-              />
-              {p.name}
-            </button>
-          ))}
-        </div>
-        <Slider label="Brightness" value={f.brightness} min={0} max={200} onStart={start} onChange={(v) => setF({ brightness: v })} />
-        <Slider label="Contrast" value={f.contrast} min={0} max={200} onStart={start} onChange={(v) => setF({ contrast: v })} />
-        <Slider label="Saturation" value={f.saturation} min={0} max={300} onStart={start} onChange={(v) => setF({ saturation: v })} />
-        <Slider label="Blur" value={f.blur} min={0} max={30} onStart={start} onChange={(v) => setF({ blur: v })} />
-        <Slider label="Hue" value={f.hue} min={0} max={360} onStart={start} onChange={(v) => setF({ hue: v })} />
-        <Slider label="Grayscale" value={f.grayscale} min={0} max={100} onStart={start} onChange={(v) => setF({ grayscale: v })} />
-        <Slider label="Sepia" value={f.sepia} min={0} max={100} onStart={start} onChange={(v) => setF({ sepia: v })} />
-      </Popover>
+      <PanelButton panel="photo" title="Filters and adjustments">Edit photo</PanelButton>
       <ToolButton
         title="Crop (or double-click the image)"
         active={cropping}
@@ -484,41 +426,32 @@ function QrTools({ el }: { el: QrElement }) {
   );
 }
 
-const ANIMATIONS: AnimationKind[] = ['none', 'fade', 'rise', 'pan', 'pop', 'wipe'];
+
+// Toolbar buttons that open a contextual side panel, like Canva's Animate/Position.
+function PanelButton({ panel, title, children }: { panel: PanelId; title: string; children: ReactNode }) {
+  const active = useUi((s) => s.panel === panel);
+  return (
+    <ToolButton title={title} active={active} onClick={() => useUi.getState().togglePanel(panel)}>
+      {children}
+    </ToolButton>
+  );
+}
 
 function CommonTools({ selected }: { selected: DesignElement[] }) {
   const s = useEditor.getState();
   const el = selected[0];
   const locked = selected.every((e) => e.locked);
   const grouped = selected.length > 1 && selected.every((e) => e.groupId && e.groupId === el.groupId);
-  const one = selected.length === 1;
+  const isText = selected.every((e) => e.type === 'text');
   return (
     <>
-      <Popover title="Animate" width={220} align="right" trigger={() => <ToolButton title="Animate (plays in Present mode)">Animate</ToolButton>}>
-        <div className="grid grid-cols-2 gap-2">
-          {ANIMATIONS.map((a) => (
-            <button key={a} className={`rounded border p-2 text-sm capitalize ${(el.animation ?? 'none') === a ? 'border-brand bg-brand/5' : ''}`} onClick={() => set({ animation: a })}>
-              {a}
-            </button>
-          ))}
-        </div>
-      </Popover>
-      <Popover title="Position" width={300} align="right" trigger={() => <ToolButton title="Position">Position</ToolButton>}>
-        <PositionPanel one={one} />
-      </Popover>
-      <Popover title="Shadow" width={260} align="right" trigger={() => <ToolButton title="Shadow">Shadow</ToolButton>}>
-        <label className="mb-2 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={!!el.shadow} onChange={(e) => set({ shadow: e.target.checked ? { x: 0, y: 8, blur: 16, color: 'rgba(0,0,0,0.35)' } : undefined })} />
-          Drop shadow
-        </label>
-        {el.shadow && (
-          <>
-            <Slider label="Offset X" value={el.shadow.x} min={-50} max={50} onStart={start} onChange={(v) => live((e) => ({ shadow: { ...e.shadow!, x: v } }))} />
-            <Slider label="Offset Y" value={el.shadow.y} min={-50} max={50} onStart={start} onChange={(v) => live((e) => ({ shadow: { ...e.shadow!, y: v } }))} />
-            <Slider label="Blur" value={el.shadow.blur} min={0} max={80} onStart={start} onChange={(v) => live((e) => ({ shadow: { ...e.shadow!, blur: v } }))} />
-          </>
-        )}
-      </Popover>
+      {!isText && (
+        <PanelButton panel="effects" title="Shadow and transparency">
+          Effects
+        </PanelButton>
+      )}
+      <PanelButton panel="animate" title="Animate (plays in Present mode)">Animate</PanelButton>
+      <PanelButton panel="position" title="Position, alignment and layers">Position</PanelButton>
       <Popover title="Transparency" width={240} align="right" trigger={() => <ToolButton title="Transparency">◐</ToolButton>}>
         <Slider label="Opacity" value={Math.round(el.opacity * 100)} min={0} max={100} onStart={start} onChange={(v) => live({ opacity: v / 100 })} />
       </Popover>
@@ -532,67 +465,5 @@ function CommonTools({ selected }: { selected: DesignElement[] }) {
       <ToolButton title="Duplicate" onClick={s.duplicateSelected}><Copy size={16} /></ToolButton>
       <ToolButton title="Delete" onClick={s.deleteSelected} disabled={locked}><Trash2 size={16} /></ToolButton>
     </>
-  );
-}
-
-function PositionPanel({ one }: { one: boolean }) {
-  const s = useEditor.getState();
-  const el = useEditor((st) => st.selected()[0]);
-  const b = (label: string, onClick: () => void, icon?: ReactNode) => (
-    <button key={label} className="flex items-center justify-center gap-1 rounded border px-2 py-1.5 text-xs hover:bg-gray-50" onClick={onClick}>
-      {icon}
-      {label}
-    </button>
-  );
-  if (!el) return null;
-  return (
-    <div className="space-y-3 text-sm">
-      <div>
-        <div className="mb-1 text-xs font-medium text-gray-500">Layer</div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {b('Forward', () => s.reorder('forward'))}
-          {b('Backward', () => s.reorder('backward'))}
-          {b('To front', () => s.reorder('front'), <ArrowUpToLine size={12} />)}
-          {b('To back', () => s.reorder('back'), <ArrowDownToLine size={12} />)}
-        </div>
-      </div>
-      <div>
-        <div className="mb-1 text-xs font-medium text-gray-500">Align {one ? 'to page' : 'elements'}</div>
-        <div className="grid grid-cols-3 gap-1.5">
-          {b('Left', () => s.align('left'))}
-          {b('Center', () => s.align('center'))}
-          {b('Right', () => s.align('right'))}
-          {b('Top', () => s.align('top'))}
-          {b('Middle', () => s.align('middle'))}
-          {b('Bottom', () => s.align('bottom'))}
-        </div>
-      </div>
-      {!one && (
-        <div className="grid grid-cols-2 gap-1.5">
-          {b('Space horizontally', () => s.distribute('h'))}
-          {b('Space vertically', () => s.distribute('v'))}
-        </div>
-      )}
-      {one && (
-        <div>
-          <div className="mb-1 text-xs font-medium text-gray-500">Advanced</div>
-          <div className="grid grid-cols-2 gap-2">
-            {(['w', 'h', 'x', 'y', 'rotation'] as const).map((k) => (
-              <label key={k} className="flex items-center gap-1 text-xs">
-                <span className="w-12 text-gray-500">{{ w: 'Width', h: 'Height', x: 'X', y: 'Y', rotation: 'Rotate' }[k]}</span>
-                <input
-                  type="number"
-                  className="w-full rounded border px-1 py-0.5"
-                  value={Math.round(el[k] * 10) / 10}
-                  disabled={k === 'h' && el.type === 'text'}
-                  onFocus={start}
-                  onChange={(e) => live({ [k]: Number(e.target.value) })}
-                />
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
   );
 }

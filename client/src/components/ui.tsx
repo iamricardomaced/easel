@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { Fill } from '../types';
 import { DEFAULT_COLORS } from '../lib/presets';
 import { useEditor } from '../store/editor';
 import { useBrandKit } from '../store/brand';
 
+// Popover content renders in a portal with fixed positioning so scrolling or
+// overflow-clipped containers (like the toolbar) cannot hide it.
 export function Popover({
   trigger,
   children,
@@ -18,27 +21,66 @@ export function Popover({
   title?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const place = () => {
+    const r = anchorRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const w = Math.min(width, window.innerWidth - 16);
+    let left = align === 'right' ? r.right - w : r.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+    setPos({ left, top: r.bottom + 8 });
+  };
+
   useEffect(() => {
     if (!open) return;
     const close = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!anchorRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
+    };
+    // Capture phase so Escape closes only the popover and doesn't also deselect.
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
     };
     window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
+    window.addEventListener('keydown', esc, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', esc, true);
+      window.removeEventListener('resize', place);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
   return (
-    <div ref={ref} className="relative" data-crop-ui>
-      <div onClick={() => setOpen((o) => !o)}>{trigger(open)}</div>
-      {open && (
-        <div
-          className={`absolute top-full z-40 mt-2 max-h-[70vh] overflow-auto rounded-xl border bg-white p-3 shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}
-          style={{ width }}
-        >
-          {title && <div className="mb-2 text-sm font-semibold text-gray-800">{title}</div>}
-          {typeof children === 'function' ? children(() => setOpen(false)) : children}
-        </div>
-      )}
+    <div ref={anchorRef} className="relative shrink-0" data-crop-ui>
+      <div
+        onClick={() => {
+          if (!open) place();
+          setOpen((o) => !o);
+        }}
+      >
+        {trigger(open)}
+      </div>
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            data-crop-ui
+            className="fixed z-[70] overflow-auto rounded-xl border bg-white p-3 text-gray-800 shadow-xl"
+            style={{ left: pos.left, top: pos.top, width: Math.min(width, window.innerWidth - 16), maxHeight: `calc(100vh - ${pos.top + 16}px)` }}
+          >
+            {title && <div className="mb-2 text-sm font-semibold text-gray-800">{title}</div>}
+            {typeof children === 'function' ? children(() => setOpen(false)) : children}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
