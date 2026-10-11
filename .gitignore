@@ -1,0 +1,7 @@
+node_modules
+dist
+server/data
+research/asar
+research/*.json
+.DS_Store
+research/

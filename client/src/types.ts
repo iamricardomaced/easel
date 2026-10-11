@@ -1,0 +1,220 @@
+export type ShapeKind =
+  | 'rect'
+  | 'ellipse'
+  | 'triangle'
+  | 'diamond'
+  | 'pentagon'
+  | 'hexagon'
+  | 'star'
+  | 'heart'
+  | 'arrow'
+  | 'speech'
+  | 'cross';
+
+export interface Fill {
+  type: 'solid' | 'linear';
+  color: string;
+  color2?: string;
+  angle?: number;
+}
+
+export interface Shadow {
+  x: number;
+  y: number;
+  blur: number;
+  color: string;
+}
+
+interface BaseElement {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+  opacity: number;
+  locked?: boolean;
+  groupId?: string;
+  name?: string;
+  shadow?: Shadow;
+  animation?: AnimationKind;
+}
+
+export type AnimationKind = 'none' | 'fade' | 'rise' | 'pan' | 'pop' | 'wipe';
+
+export interface TextElement extends BaseElement {
+  type: 'text';
+  text: string;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  italic: boolean;
+  underline: boolean;
+  strike: boolean;
+  uppercase: boolean;
+  color: string;
+  align: 'left' | 'center' | 'right' | 'justify';
+  lineHeight: number;
+  letterSpacing: number;
+  list?: 'none' | 'bullet' | 'number';
+  background?: string;
+  effect?: 'none' | 'outline' | 'neon' | 'lift' | 'hollow';
+}
+
+export interface ShapeElement extends BaseElement {
+  type: 'shape';
+  shape: ShapeKind;
+  fill: Fill;
+  stroke: string;
+  strokeWidth: number;
+  strokeDash?: 'solid' | 'dashed' | 'dotted';
+  radius: number;
+  text?: string;
+  textColor?: string;
+  fontSize?: number;
+  fontFamily?: string;
+}
+
+export interface ImageFilters {
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  blur: number;
+  grayscale: number;
+  sepia: number;
+  hue: number;
+}
+
+export interface ImageElement extends BaseElement {
+  type: 'image';
+  src: string;
+  flipX: boolean;
+  flipY: boolean;
+  radius: number;
+  filters: ImageFilters;
+  // Crop: the image is drawn at (cropX, cropY) with size (cropW, cropH) relative to the
+  // frame, in fractions of the frame size. 0,0,1,1 = no crop.
+  crop: { x: number; y: number; w: number; h: number };
+  frame?: 'none' | 'circle' | 'star' | 'heart' | 'hexagon' | 'triangle';
+  border?: { color: string; width: number };
+}
+
+export interface LineElement extends BaseElement {
+  type: 'line';
+  color: string;
+  strokeWidth: number;
+  dash: 'solid' | 'dashed' | 'dotted';
+  startCap: 'none' | 'arrow' | 'circle';
+  endCap: 'none' | 'arrow' | 'circle';
+}
+
+export interface IconElement extends BaseElement {
+  type: 'icon';
+  icon: string;
+  color: string;
+  strokeWidth: number;
+}
+
+export interface DrawElement extends BaseElement {
+  type: 'draw';
+  // Points in the element's own coordinate space, normalised to the original w/h.
+  points: [number, number][];
+  baseW: number;
+  baseH: number;
+  color: string;
+  strokeWidth: number;
+  highlighter?: boolean;
+}
+
+export interface TableElement extends BaseElement {
+  type: 'table';
+  rows: string[][];
+  headerColor: string;
+  cellColor: string;
+  borderColor: string;
+  textColor: string;
+  fontSize: number;
+  fontFamily: string;
+}
+
+export interface ChartElement extends BaseElement {
+  type: 'chart';
+  chart: 'bar' | 'line' | 'pie' | 'donut';
+  labels: string[];
+  values: number[];
+  colors: string[];
+  textColor: string;
+  showValues: boolean;
+}
+
+export interface QrElement extends BaseElement {
+  type: 'qr';
+  value: string;
+  color: string;
+  background: string;
+}
+
+export type DesignElement =
+  | TextElement
+  | ShapeElement
+  | ImageElement
+  | LineElement
+  | IconElement
+  | DrawElement
+  | TableElement
+  | ChartElement
+  | QrElement;
+
+export type ElementType = DesignElement['type'];
+
+export interface Page {
+  id: string;
+  background: Fill;
+  backgroundImage?: string;
+  elements: DesignElement[];
+  notes?: string;
+  duration?: number;
+  title?: string;
+}
+
+export interface DesignDoc {
+  width: number;
+  height: number;
+  unit: 'px' | 'mm' | 'in';
+  pages: Page[];
+}
+
+export interface DesignSummary {
+  id: string;
+  title: string;
+  thumbnail: string | null;
+  starred: boolean;
+  trashedAt: number | null;
+  shareToken: string | null;
+  shareMode: 'view' | 'template' | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Design extends DesignSummary {
+  doc: DesignDoc;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface UploadItem {
+  id: string;
+  url: string;
+  filename: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface BrandKit {
+  colors: string[];
+  fonts: { heading: string; body: string };
+}
