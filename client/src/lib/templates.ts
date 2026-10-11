@@ -100,7 +100,7 @@ export function buildTemplates(): Template[] {
       height: 1080,
       pages: [
         page(solid('#0e1318'), [
-          at(makeShape('rect', { fill: linear('#8c52ff', '#00c2cb') }), 0, 0, 24, 1080),
+          at(makeShape('rect', { fill: linear('#ff5c39', '#ffb347') }), 0, 0, 24, 1080),
           at(makeText({ text: 'Acme Robotics', fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 140, color: '#ffffff', align: 'left' }), 160, 360, 1400, 180),
           at(makeText({ text: 'Series A · 2026', fontFamily: 'Inter', fontSize: 48, color: '#9aa4b2', align: 'left' }), 160, 560, 1000, 70),
         ]),
@@ -109,7 +109,7 @@ export function buildTemplates(): Template[] {
           at(makeText({ text: '• Warehouses lose 18% of shifts to manual picking\n• Labour costs grew 9% a year since 2021\n• Existing robots need 6-month integrations', fontFamily: 'Inter', fontSize: 48, color: '#333', align: 'left', lineHeight: 1.7 }), 160, 320, 1100, 300),
           at(makeImage(photo('warehouse', 600, 700), 600, 700, { radius: 32 }), 1180, 220),
         ]),
-        page(linear('#8c52ff', '#00c2cb'), [
+        page(linear('#ff5c39', '#ffb347'), [
           at(makeText({ text: 'Thank you', fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 180, color: '#ffffff' }), 160, 400, 1600, 220),
           at(makeText({ text: 'hello@acme.example', fontFamily: 'Inter', fontSize: 48, color: '#ffffff' }), 160, 640, 1600, 70),
         ]),

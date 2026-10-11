@@ -97,7 +97,7 @@ function TextTools({ el }: { el: TextElement }) {
             {FONTS.map((f) => (
               <button
                 key={f}
-                className={`block w-full rounded px-2 py-1.5 text-left text-base hover:bg-gray-100 ${f === el.fontFamily ? 'bg-[#8b3dff]/10' : ''}`}
+                className={`block w-full rounded px-2 py-1.5 text-left text-base hover:bg-gray-100 ${f === el.fontFamily ? 'bg-brand/10' : ''}`}
                 style={{ fontFamily: f }}
                 onClick={() => {
                   set({ fontFamily: f });
@@ -150,13 +150,13 @@ function TextTools({ el }: { el: TextElement }) {
           {(['none', 'lift', 'hollow', 'outline', 'neon'] as const).map((fx) => (
             <button
               key={fx}
-              className={`rounded-lg border p-2 text-sm capitalize ${el.effect === fx || (!el.effect && fx === 'none') ? 'border-[#8b3dff] bg-[#8b3dff]/5' : ''}`}
+              className={`rounded-lg border p-2 text-sm capitalize ${el.effect === fx || (!el.effect && fx === 'none') ? 'border-brand bg-brand/5' : ''}`}
               onClick={() => set({ effect: fx })}
             >
               {fx}
             </button>
           ))}
-          <button className={`rounded-lg border p-2 text-sm ${el.background ? 'border-[#8b3dff] bg-[#8b3dff]/5' : ''}`} onClick={() => set({ background: el.background ? undefined : '#ffde59' })}>
+          <button className={`rounded-lg border p-2 text-sm ${el.background ? 'border-brand bg-brand/5' : ''}`} onClick={() => set({ background: el.background ? undefined : '#ffde59' })}>
             Background
           </button>
         </div>
@@ -179,7 +179,7 @@ function ShapeTools({ el }: { el: ShapeElement }) {
       <Popover title="Border" width={280} trigger={() => <ToolButton title="Border style">Border</ToolButton>}>
         <div className="mb-2 flex gap-2">
           {(['solid', 'dashed', 'dotted'] as const).map((d) => (
-            <button key={d} className={`flex-1 rounded border p-1 text-xs capitalize ${el.strokeDash === d ? 'border-[#8b3dff]' : ''}`} onClick={() => set({ strokeDash: d, strokeWidth: el.strokeWidth || 4 })}>
+            <button key={d} className={`flex-1 rounded border p-1 text-xs capitalize ${el.strokeDash === d ? 'border-brand' : ''}`} onClick={() => set({ strokeDash: d, strokeWidth: el.strokeWidth || 4 })}>
               {d}
             </button>
           ))}
@@ -193,7 +193,7 @@ function ShapeTools({ el }: { el: ShapeElement }) {
       <Popover title="Change shape" width={240} trigger={() => <ToolButton title="Change shape">Shape</ToolButton>}>
         <div className="grid grid-cols-4 gap-2">
           {SHAPE_KINDS.map((k) => (
-            <button key={k} className={`rounded border p-1 text-[10px] capitalize ${el.shape === k ? 'border-[#8b3dff]' : ''}`} onClick={() => set({ shape: k })}>
+            <button key={k} className={`rounded border p-1 text-[10px] capitalize ${el.shape === k ? 'border-brand' : ''}`} onClick={() => set({ shape: k })}>
               {k}
             </button>
           ))}
@@ -282,7 +282,7 @@ function ImageTools({ el, cropping }: { el: ImageElement; cropping: boolean }) {
             min={1}
             max={4}
             step={0.01}
-            className="flex-1 accent-[#8b3dff]"
+            className="flex-1 accent-brand"
             value={Math.min(el.crop.w, el.crop.h)}
             onChange={(e) => {
               const z = Number(e.target.value);
@@ -304,7 +304,7 @@ function ImageTools({ el, cropping }: { el: ImageElement; cropping: boolean }) {
               });
             }}
           />
-          <button className="rounded bg-[#8b3dff] px-2 py-1 text-white" onClick={() => useEditor.getState().setEditing(null)}>
+          <button className="rounded bg-brand px-2 py-1 text-white" onClick={() => useEditor.getState().setEditing(null)}>
             Done
           </button>
         </div>
@@ -314,7 +314,7 @@ function ImageTools({ el, cropping }: { el: ImageElement; cropping: boolean }) {
       <Popover title="Frame & corners" width={260} trigger={() => <ToolButton title="Frame">Frame</ToolButton>}>
         <div className="mb-3 grid grid-cols-3 gap-2">
           {(['none', 'circle', 'heart', 'star', 'hexagon', 'triangle'] as const).map((fr) => (
-            <button key={fr} className={`rounded border p-1 text-xs capitalize ${(el.frame ?? 'none') === fr ? 'border-[#8b3dff]' : ''}`} onClick={() => set({ frame: fr })}>
+            <button key={fr} className={`rounded border p-1 text-xs capitalize ${(el.frame ?? 'none') === fr ? 'border-brand' : ''}`} onClick={() => set({ frame: fr })}>
               {fr}
             </button>
           ))}
@@ -346,7 +346,7 @@ function LineTools({ el }: { el: LineElement }) {
       <Popover title="Line style" trigger={() => <ToolButton>Style</ToolButton>}>
         <div className="mb-2 flex gap-2">
           {(['solid', 'dashed', 'dotted'] as const).map((d) => (
-            <button key={d} className={`flex-1 rounded border p-1 text-xs capitalize ${el.dash === d ? 'border-[#8b3dff]' : ''}`} onClick={() => set({ dash: d })}>
+            <button key={d} className={`flex-1 rounded border p-1 text-xs capitalize ${el.dash === d ? 'border-brand' : ''}`} onClick={() => set({ dash: d })}>
               {d}
             </button>
           ))}
@@ -497,7 +497,7 @@ function CommonTools({ selected }: { selected: DesignElement[] }) {
       <Popover title="Animate" width={220} align="right" trigger={() => <ToolButton title="Animate (plays in Present mode)">Animate</ToolButton>}>
         <div className="grid grid-cols-2 gap-2">
           {ANIMATIONS.map((a) => (
-            <button key={a} className={`rounded border p-2 text-sm capitalize ${(el.animation ?? 'none') === a ? 'border-[#8b3dff] bg-[#8b3dff]/5' : ''}`} onClick={() => set({ animation: a })}>
+            <button key={a} className={`rounded border p-2 text-sm capitalize ${(el.animation ?? 'none') === a ? 'border-brand bg-brand/5' : ''}`} onClick={() => set({ animation: a })}>
               {a}
             </button>
           ))}

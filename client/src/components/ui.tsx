@@ -64,7 +64,7 @@ export function ToolButton({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`flex h-8 min-w-8 items-center justify-center gap-1 rounded-md px-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-40 ${active ? 'bg-[#8b3dff]/10 text-[#8b3dff]' : ''} ${className}`}
+      className={`flex h-8 min-w-8 items-center justify-center gap-1 rounded-md px-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-40 ${active ? 'bg-brand/10 text-brand' : ''} ${className}`}
     >
       {children}
     </button>
@@ -105,7 +105,7 @@ export function Slider({
       </div>
       <input
         type="range"
-        className="w-full accent-[#8b3dff]"
+        className="w-full accent-brand"
         min={min}
         max={max}
         step={step}
@@ -138,7 +138,7 @@ function Swatch({ color, onPick, selected }: { color: string; onPick: () => void
       type="button"
       title={color}
       onClick={onPick}
-      className={`h-7 w-7 rounded-md border border-black/10 ${selected ? 'ring-2 ring-[#8b3dff] ring-offset-1' : ''}`}
+      className={`h-7 w-7 rounded-md border border-black/10 ${selected ? 'ring-2 ring-brand ring-offset-1' : ''}`}
       style={{ background: color }}
     />
   );
@@ -240,7 +240,7 @@ export function ColorPicker({
             <div className="flex items-center gap-2 text-xs">
               <input type="color" value={fill.color.slice(0, 7)} onChange={(e) => onFill({ ...fill, color: e.target.value })} className="h-7 w-8 rounded border" />
               <input type="color" value={(fill.color2 ?? fill.color).slice(0, 7)} onChange={(e) => onFill({ ...fill, color2: e.target.value })} className="h-7 w-8 rounded border" />
-              <input type="range" min={0} max={360} value={fill.angle ?? 135} onChange={(e) => onFill({ ...fill, angle: Number(e.target.value) })} className="flex-1 accent-[#8b3dff]" />
+              <input type="range" min={0} max={360} value={fill.angle ?? 135} onChange={(e) => onFill({ ...fill, angle: Number(e.target.value) })} className="flex-1 accent-brand" />
               <span className="w-8 text-right">{fill.angle ?? 135}°</span>
             </div>
           )}

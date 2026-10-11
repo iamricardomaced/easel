@@ -1,6 +1,6 @@
-# Canvas
+# Easel
 
-A Canva-style design editor: React + TypeScript + Vite front end, Express + SQLite (Node's built-in `node:sqlite`) back end.
+A browser design editor for social posts, decks and print: React + TypeScript + Vite front end, Express + SQLite (Node's built-in `node:sqlite`) back end.
 
 ## Run it
 

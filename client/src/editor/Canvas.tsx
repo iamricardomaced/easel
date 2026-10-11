@@ -98,7 +98,7 @@ export function Canvas() {
   return (
     <div
       ref={scrollRef}
-      className="relative flex-1 overflow-auto bg-[#ebecf0]"
+      className="relative flex-1 overflow-auto bg-paper"
       style={{ cursor: panning ? 'grab' : undefined }}
       onPointerDownCapture={startPan}
       onPointerDown={(e) => {
@@ -430,7 +430,7 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
       <div
         ref={surfaceRef}
         data-page-index={index}
-        className={`relative shadow-[0_2px_8px_rgba(0,0,0,0.12)] ${active ? 'ring-2 ring-[#8b3dff]/30' : ''}`}
+        className={`relative shadow-[0_2px_8px_rgba(0,0,0,0.12)] ${active ? 'ring-2 ring-brand/30' : ''}`}
         style={{ width: width * zoom, height: height * zoom, cursor }}
         onPointerDown={onSurfaceDown}
         onContextMenu={(e) => {
@@ -465,7 +465,7 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
               className="pointer-events-none absolute inset-0"
               style={{
                 backgroundImage:
-                  'linear-gradient(to right, rgba(139,61,255,.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(139,61,255,.15) 1px, transparent 1px)',
+                  'linear-gradient(to right, rgba(255,92,57,.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,92,57,.18) 1px, transparent 1px)',
                 backgroundSize: `${width / 12}px ${width / 12}px`,
               }}
             />
@@ -488,9 +488,9 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
         {/* Screen-space overlays */}
         {hoverId && !selectedIds.includes(hoverId) && tool === 'select' && (() => {
           const h = page.elements.find((el) => el.id === hoverId);
-          return h ? <Outline box={h} zoom={zoom} className="border-[#8b3dff]/70" /> : null;
+          return h ? <Outline box={h} zoom={zoom} className="border-brand/70" /> : null;
         })()}
-        {!single && selected.map((el) => <Outline key={el.id} box={el} zoom={zoom} className="border-[#8b3dff]/60 border-dashed" />)}
+        {!single && selected.map((el) => <Outline key={el.id} box={el} zoom={zoom} className="border-brand/60 border-dashed" />)}
         {box && !editing && (
           <div
             className="pointer-events-none absolute"
@@ -502,7 +502,7 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
               transform: `rotate(${box.rotation}deg)`,
             }}
           >
-            <div className={`absolute inset-0 border-2 ${anyLocked ? 'border-gray-400' : 'border-[#8b3dff]'}`} />
+            <div className={`absolute inset-0 border-2 ${anyLocked ? 'border-gray-400' : 'border-brand'}`} />
             {!anyLocked &&
               HANDLES.filter((h) => {
                 if (single?.type === 'text') return h !== 'n' && h !== 's';
@@ -548,13 +548,13 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
         {guides.map((g, i) => (
           <div
             key={i}
-            className="pointer-events-none absolute bg-[#ff3ea5]"
+            className="pointer-events-none absolute bg-sky-500"
             style={g.orientation === 'v' ? { left: g.pos * zoom, top: 0, width: 1, height: '100%' } : { top: g.pos * zoom, left: 0, height: 1, width: '100%' }}
           />
         ))}
         {marquee && (
           <div
-            className="pointer-events-none absolute border border-[#8b3dff] bg-[#8b3dff]/10"
+            className="pointer-events-none absolute border border-brand bg-brand/10"
             style={{ left: marquee.x * zoom, top: marquee.y * zoom, width: marquee.w * zoom, height: marquee.h * zoom }}
           />
         )}
@@ -779,7 +779,7 @@ function CropEditor({ el, index }: { el: ImageElement; index: number }) {
           style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%`, width: `${c.w * 100}%`, height: `${c.h * 100}%`, objectFit: 'cover' }}
         />
       </div>
-      <div className="pointer-events-none absolute inset-0 outline outline-2 outline-[#8b3dff]" />
+      <div className="pointer-events-none absolute inset-0 outline outline-2 outline-brand" />
     </div>
   );
 }

@@ -38,7 +38,7 @@ export function EditorPage() {
       .getDesign(id!)
       .then((d) => {
         useEditor.getState().load(d.id, d.title, d.doc);
-        document.title = `${d.title} – Canvas`;
+        document.title = `${d.title} – Easel`;
         setLoaded(true);
       })
       .catch((e) => setError(e.message));
@@ -111,7 +111,7 @@ export function EditorPage() {
   const savedTitle = useRef<string | null>(null);
   useEffect(() => {
     if (!loaded) return;
-    document.title = `${title} – Canvas`;
+    document.title = `${title} – Easel`;
     if (savedTitle.current === null || savedTitle.current === title) {
       savedTitle.current = title;
       return;
@@ -160,7 +160,7 @@ export function EditorPage() {
   if (!loaded) return <div className="flex h-screen items-center justify-center text-gray-400">Loading design…</div>;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#ebecf0]">
+    <div className="flex h-screen flex-col overflow-hidden bg-paper">
       <TopBar saveState={saveState} onPresent={() => setPresenting(true)} />
       <div className="flex min-h-0 flex-1">
         <Sidebar />

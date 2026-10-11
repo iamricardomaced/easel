@@ -33,7 +33,7 @@ export function BottomBar({ onFit, onPresent }: { onFit: () => void; onPresent: 
                 s.setPageIndex(i);
                 document.querySelector(`[data-page-index="${i}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }}
-              className={`relative shrink-0 overflow-hidden rounded border-2 ${i === pageIndex ? 'border-[#8b3dff]' : 'border-transparent'}`}
+              className={`relative shrink-0 overflow-hidden rounded border-2 ${i === pageIndex ? 'border-brand' : 'border-transparent'}`}
               style={{ width: doc.width * k + 4, height: thumbH + 4 }}
             >
               <div style={{ transform: `scale(${k})`, transformOrigin: 'top left' }}>
@@ -48,15 +48,15 @@ export function BottomBar({ onFit, onPresent }: { onFit: () => void; onPresent: 
         </div>
       )}
       <div className="flex h-10 items-center gap-3 px-4 text-sm text-gray-700">
-        <button className={`flex items-center gap-1 rounded px-2 py-1 hover:bg-gray-100 ${notes ? 'text-[#8b3dff]' : ''}`} onClick={() => setNotes(!notes)}>
+        <button className={`flex items-center gap-1 rounded px-2 py-1 hover:bg-gray-100 ${notes ? 'text-brand' : ''}`} onClick={() => setNotes(!notes)}>
           <StickyNote size={16} /> Notes
         </button>
         <div className="flex-1" />
-        <input type="range" min={0.05} max={3} step={0.01} value={zoom} onChange={(e) => s.setZoom(Number(e.target.value))} className="w-40 accent-[#8b3dff]" />
+        <input type="range" min={0.05} max={3} step={0.01} value={zoom} onChange={(e) => s.setZoom(Number(e.target.value))} className="w-40 accent-brand" />
         <button className="w-14 rounded px-1 py-1 text-xs hover:bg-gray-100" onClick={onFit} title="Fit to screen">
           {Math.round(zoom * 100)}%
         </button>
-        <button className={`rounded px-2 py-1 text-xs hover:bg-gray-100 ${strip ? 'text-[#8b3dff]' : ''}`} onClick={() => setStrip(!strip)}>
+        <button className={`rounded px-2 py-1 text-xs hover:bg-gray-100 ${strip ? 'text-brand' : ''}`} onClick={() => setStrip(!strip)}>
           Pages {pageIndex + 1} / {doc.pages.length}
         </button>
         <button className="rounded p-1 hover:bg-gray-100" title="Present full screen" onClick={onPresent}>

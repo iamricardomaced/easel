@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 
+@theme {
+  --color-brand: #ff5c39;
+  --color-brand-strong: #e5462a;
+  --color-ink: #16181d;
+  --color-paper: #f3f0ea;
+}
+
 html,
 body,
 #root {
@@ -9,7 +16,7 @@ body,
 body {
   margin: 0;
   font-family: 'Inter', system-ui, sans-serif;
-  color: #0e1318;
+  color: #16181d;
   background: #fff;
   -webkit-font-smoothing: antialiased;
 }

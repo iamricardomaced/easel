@@ -107,7 +107,7 @@ export const useEditor = create<EditorState>((set, get) => {
     future: [],
     version: 0,
     tool: 'select',
-    penColor: '#8c52ff',
+    penColor: '#ff5c39',
     penWidth: 8,
     showGrid: false,
     showRulers: false,

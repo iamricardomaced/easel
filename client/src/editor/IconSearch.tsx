@@ -19,7 +19,7 @@ export default function IconSearch() {
   return (
     <>
       <input
-        className="mb-3 w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm outline-none focus:border-[#8b3dff]"
+        className="mb-3 w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand"
         placeholder={`Search ${NAMES.length} icons`}
         value={q}
         onChange={(e) => setQ(e.target.value)}

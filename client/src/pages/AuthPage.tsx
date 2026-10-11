@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../store/auth';
+import { Logo } from '../components/Logo';
 
 export function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -30,10 +31,10 @@ export function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#00c4cc] via-[#6a50e8] to-[#7d2ae8] p-4">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl">
-        <div className="mb-1 bg-gradient-to-r from-[#00c4cc] to-[#7d2ae8] bg-clip-text text-3xl font-extrabold italic text-transparent" style={{ fontFamily: 'Pacifico' }}>
-          Canvas
+    <div className="flex min-h-screen items-center justify-center bg-paper p-4">
+      <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-black/5 bg-white p-8 shadow-[0_20px_60px_-20px_rgba(22,24,29,0.25)]">
+        <div className="mb-3">
+          <Logo size={28} />
         </div>
         <p className="mb-6 text-sm text-gray-500">{mode === 'login' ? 'Log in to keep designing.' : 'Create a free account.'}</p>
         {mode === 'signup' && (
@@ -50,12 +51,12 @@ export function AuthPage() {
           onChange={(e) => setPassword(e.target.value)}
         />
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-        <button disabled={busy} className="w-full rounded-lg bg-[#8b3dff] py-2.5 text-sm font-semibold text-white hover:bg-[#7731d8] disabled:opacity-60">
+        <button disabled={busy} className="w-full rounded-lg bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-strong disabled:opacity-60">
           {busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Sign up'}
         </button>
         <p className="mt-4 text-center text-sm text-gray-600">
           {mode === 'login' ? 'New here? ' : 'Already have an account? '}
-          <button type="button" className="font-semibold text-[#8b3dff]" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
+          <button type="button" className="font-semibold text-brand" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
             {mode === 'login' ? 'Create an account' : 'Log in'}
           </button>
         </p>

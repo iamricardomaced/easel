@@ -10,6 +10,7 @@ import { clonePage, newDoc } from '../lib/factory';
 import { StaticPage } from '../editor/ElementView';
 import { Modal, Popover } from '../components/ui';
 import { toast } from '../lib/toast';
+import { Logo } from '../components/Logo';
 
 type View = 'all' | 'starred' | 'trash';
 
@@ -27,7 +28,7 @@ export function HomePage() {
   }, [view, q]);
 
   useEffect(() => {
-    document.title = 'Home – Canvas';
+    document.title = 'Home – Easel';
     const t = setTimeout(refresh, 200);
     return () => clearTimeout(t);
   }, [refresh]);
@@ -45,7 +46,7 @@ export function HomePage() {
   const navBtn = (v: View, label: string, icon: React.ReactNode) => (
     <button
       onClick={() => setView(v)}
-      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm ${view === v ? 'bg-[#8b3dff]/10 font-semibold text-[#8b3dff]' : 'text-gray-700 hover:bg-gray-100'}`}
+      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm ${view === v ? 'bg-brand/10 font-semibold text-brand' : 'text-gray-700 hover:bg-gray-100'}`}
     >
       {icon}
       {label}
@@ -55,11 +56,11 @@ export function HomePage() {
   return (
     <div className="flex min-h-screen bg-white">
       <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r p-4">
-        <div className="mb-6 bg-gradient-to-r from-[#00c4cc] to-[#7d2ae8] bg-clip-text px-2 text-3xl text-transparent" style={{ fontFamily: 'Pacifico' }}>
-          Canvas
+        <div className="mb-6 px-2">
+          <Logo size={26} />
         </div>
-        <button onClick={() => setCustom(true)} className="mb-4 flex items-center justify-center gap-2 rounded-lg bg-[#8b3dff] py-2.5 text-sm font-semibold text-white hover:bg-[#7731d8]">
-          <Plus size={16} /> Create a design
+        <button onClick={() => setCustom(true)} className="mb-4 flex items-center justify-center gap-2 rounded-lg bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-strong">
+          <Plus size={16} /> New design
         </button>
         <nav className="space-y-1">
           {navBtn('all', 'Home', <Home size={18} />)}
@@ -70,7 +71,7 @@ export function HomePage() {
         <Popover
           trigger={() => (
             <button className="flex w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-gray-100">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#00c4cc] to-[#7d2ae8] text-sm font-bold text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-sm font-bold text-white">
                 {user?.name[0]?.toUpperCase()}
               </span>
               <span className="min-w-0">
@@ -88,23 +89,24 @@ export function HomePage() {
 
       <main className="min-w-0 flex-1">
         {view === 'all' && !q && (
-          <section className="bg-gradient-to-r from-[#00c4cc] via-[#6a50e8] to-[#7d2ae8] px-10 pb-10 pt-12 text-center text-white">
-            <h1 className="mb-6 text-4xl font-bold">What will you design today?</h1>
-            <div className="mx-auto mb-8 flex max-w-xl items-center gap-2 rounded-full bg-white px-4 py-3 text-gray-700 shadow-lg">
+          <section className="border-b bg-paper px-10 pb-10 pt-10 text-ink">
+            <h1 className="mb-1 text-3xl font-bold tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Start something new</h1>
+            <p className="mb-6 text-sm text-gray-600">Pick a format, start from a template, or set your own size.</p>
+            <div className="mb-8 flex max-w-xl items-center gap-2 rounded-lg border border-black/10 bg-white px-4 py-2.5 text-gray-700">
               <Search size={18} className="text-gray-400" />
               <input className="flex-1 bg-transparent text-sm outline-none" placeholder="Search your designs" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            <div className="mx-auto flex max-w-5xl flex-wrap justify-center gap-3">
+            <div className="flex flex-wrap gap-3">
               {SIZE_PRESETS.slice(0, 10).map((p) => (
-                <button key={p.id} onClick={() => create(p.label, p.width, p.height)} className="flex flex-col items-center gap-2 rounded-xl px-3 py-2 hover:bg-white/15">
-                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/20">
-                    <span className="block border-2 border-white" style={{ width: (28 * p.width) / Math.max(p.width, p.height), height: (28 * p.height) / Math.max(p.width, p.height) }} />
+                <button key={p.id} onClick={() => create(p.label, p.width, p.height)} className="flex w-28 flex-col items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-3 hover:border-brand">
+                  <span className="flex h-12 w-12 items-center justify-center">
+                    <span className="block rounded-[3px] border-2 border-ink bg-brand/15" style={{ width: (28 * p.width) / Math.max(p.width, p.height), height: (28 * p.height) / Math.max(p.width, p.height) }} />
                   </span>
-                  <span className="max-w-[90px] text-xs font-medium">{p.label}</span>
+                  <span className="text-center text-xs font-medium">{p.label}</span>
                 </button>
               ))}
-              <button onClick={() => setCustom(true)} className="flex flex-col items-center gap-2 rounded-xl px-3 py-2 hover:bg-white/15">
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/20">
+              <button onClick={() => setCustom(true)} className="flex w-28 flex-col items-center gap-2 rounded-lg border border-dashed border-black/20 bg-white px-3 py-3 hover:border-brand">
+                <span className="flex h-12 w-12 items-center justify-center text-brand">
                   <Plus />
                 </span>
                 <span className="text-xs font-medium">Custom size</span>
@@ -253,7 +255,7 @@ function CustomSizeModal({ onClose, onCreate }: { onClose: () => void; onCreate:
     <Modal title="Create a design" onClose={onClose} width={560}>
       <div className="mb-4 grid max-h-72 grid-cols-2 gap-2 overflow-auto">
         {SIZE_PRESETS.map((p) => (
-          <button key={p.id} className="rounded-lg border px-3 py-2 text-left hover:border-[#8b3dff]" onClick={() => onCreate(p.width, p.height)}>
+          <button key={p.id} className="rounded-lg border px-3 py-2 text-left hover:border-brand" onClick={() => onCreate(p.width, p.height)}>
             <div className="text-sm font-medium">{p.label}</div>
             <div className="text-xs text-gray-500">
               {p.category} · {p.width} × {p.height} px
@@ -277,7 +279,7 @@ function CustomSizeModal({ onClose, onCreate }: { onClose: () => void; onCreate:
         </select>
         <div className="flex-1" />
         <button
-          className="rounded-lg bg-[#8b3dff] px-4 py-2 font-semibold text-white disabled:opacity-50"
+          className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-50"
           disabled={toPx(w) < 16 || toPx(h) < 16 || toPx(w) > 8000 || toPx(h) > 8000}
           onClick={() => onCreate(toPx(w), toPx(h))}
         >

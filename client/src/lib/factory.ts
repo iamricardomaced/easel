@@ -133,7 +133,7 @@ export function makeTable(rows = 3, cols = 3): TableElement {
     rows: Array.from({ length: rows }, (_, r) =>
       Array.from({ length: cols }, (_, c) => (r === 0 ? `Heading ${c + 1}` : '')),
     ),
-    headerColor: '#e8e2f8',
+    headerColor: '#fde5dc',
     cellColor: '#ffffff',
     borderColor: '#c9c9c9',
     textColor: '#1a1a1a',
@@ -149,7 +149,7 @@ export function makeChart(chart: ChartElement['chart']): ChartElement {
     chart,
     labels: ['Q1', 'Q2', 'Q3', 'Q4'],
     values: [12, 19, 8, 15],
-    colors: ['#8c52ff', '#00c2cb', '#ff66c4', '#ffbd59', '#7ed957', '#5271ff'],
+    colors: ['#ff5c39', '#16181d', '#2f6f6a', '#ffb347', '#8fb8de', '#c9b8a6'],
     textColor: '#333333',
     showValues: true,
   };

@@ -14,7 +14,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
         <h1 className="text-lg font-semibold">Something went wrong</h1>
         <p className="max-w-md text-sm text-gray-600">{this.state.error.message}</p>
         <p className="text-xs text-gray-400">Your last autosave is safe. Reload to continue.</p>
-        <button className="rounded-lg bg-[#8b3dff] px-4 py-2 text-sm font-semibold text-white" onClick={() => location.reload()}>
+        <button className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white" onClick={() => location.reload()}>
           Reload
         </button>
       </div>

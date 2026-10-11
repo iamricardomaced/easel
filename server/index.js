@@ -304,7 +304,7 @@ app.delete('/api/uploads/:id', auth, (req, res) => {
 app.use('/files', express.static(UPLOAD_DIR, { maxAge: '30d', immutable: true }));
 
 // ---------- Brand kit ----------
-const DEFAULT_KIT = { colors: ['#7D2AE8', '#00C4CC', '#FFFFFF', '#0E1318'], fonts: { heading: 'Montserrat', body: 'Open Sans' } };
+const DEFAULT_KIT = { colors: ['#FF5C39', '#16181D', '#F3F0EA', '#2F6F6A'], fonts: { heading: 'Space Grotesk', body: 'Inter' } };
 
 app.get('/api/brand-kit', auth, (req, res) => {
   const row = db.prepare('SELECT data FROM brand_kits WHERE owner_id = ?').get(req.user.id);

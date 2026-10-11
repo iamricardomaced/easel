@@ -8,6 +8,7 @@ import { exportDesign, type ExportFormat } from '../lib/export';
 import { api } from '../api';
 import { toast } from '../lib/toast';
 import { MOD } from './ContextMenu';
+import { Logo } from '../components/Logo';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved' | 'error';
 
@@ -36,9 +37,10 @@ export function TopBar({ saveState, onPresent }: { saveState: SaveState; onPrese
   );
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 bg-gradient-to-r from-[#00c4cc] via-[#6a50e8] to-[#7d2ae8] px-3 text-white">
-      <Link to="/" className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm font-medium hover:bg-white/15">
-        <ChevronLeft size={16} /> Home
+    <header className="flex h-14 shrink-0 items-center gap-2 bg-ink px-3 text-white">
+      <Link to="/" className="flex items-center gap-1 rounded-md px-2 py-1.5 hover:bg-white/10" title="Back to home">
+        <ChevronLeft size={16} />
+        <Logo size={18} inverted />
       </Link>
       <Popover
         width={260}
@@ -76,10 +78,10 @@ export function TopBar({ saveState, onPresent }: { saveState: SaveState; onPrese
       <button className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium hover:bg-white/15" onClick={onPresent}>
         <Play size={16} /> Present
       </button>
-      <button className="flex items-center gap-1.5 rounded-md bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30" onClick={() => setModal('download')}>
+      <button className="flex items-center gap-1.5 rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium hover:bg-white/20" onClick={() => setModal('download')}>
         <Download size={16} /> Download
       </button>
-      <button className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-[#7d2ae8] hover:bg-white/90" onClick={() => setModal('share')}>
+      <button className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-strong" onClick={() => setModal('share')}>
         <Share2 size={16} /> Share
       </button>
       {modal === 'resize' && <ResizeModal onClose={() => setModal(null)} />}
@@ -121,7 +123,7 @@ function ResizeModal({ onClose }: { onClose: () => void }) {
           {SIZE_PRESETS.map((p) => (
             <button
               key={p.id}
-              className={`rounded border px-2 py-1.5 text-left text-xs hover:bg-gray-50 ${p.width === w && p.height === h ? 'border-[#8b3dff]' : ''}`}
+              className={`rounded border px-2 py-1.5 text-left text-xs hover:bg-gray-50 ${p.width === w && p.height === h ? 'border-brand' : ''}`}
               onClick={() => {
                 setW(p.width);
                 setH(p.height);
@@ -142,7 +144,7 @@ function ResizeModal({ onClose }: { onClose: () => void }) {
           <button className="rounded-lg border px-4 py-2 text-sm" onClick={() => apply(true)}>
             Copy &amp; resize
           </button>
-          <button className="rounded-lg bg-[#8b3dff] px-4 py-2 text-sm font-semibold text-white" onClick={() => apply(false)}>
+          <button className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white" onClick={() => apply(false)}>
             Resize
           </button>
         </div>
@@ -187,7 +189,7 @@ function DownloadModal({ onClose }: { onClose: () => void }) {
         {(format === 'png' || format === 'jpg') && (
           <label className="block">
             Size × {scale} ({Math.round(doc.width * scale)} × {Math.round(doc.height * scale)} px)
-            <input type="range" min={0.25} max={4} step={0.25} value={scale} onChange={(e) => setScale(Number(e.target.value))} className="mt-1 w-full accent-[#8b3dff]" />
+            <input type="range" min={0.25} max={4} step={0.25} value={scale} onChange={(e) => setScale(Number(e.target.value))} className="mt-1 w-full accent-brand" />
           </label>
         )}
         {format === 'png' && (
@@ -204,7 +206,7 @@ function DownloadModal({ onClose }: { onClose: () => void }) {
             </select>
           </label>
         )}
-        <button disabled={!!progress} className="w-full rounded-lg bg-[#8b3dff] py-2.5 font-semibold text-white disabled:opacity-60" onClick={run}>
+        <button disabled={!!progress} className="w-full rounded-lg bg-brand py-2.5 font-semibold text-white disabled:opacity-60" onClick={run}>
           {progress ?? 'Download'}
         </button>
       </div>
@@ -245,7 +247,7 @@ function ShareModal({ onClose }: { onClose: () => void }) {
               <div className="flex gap-2">
                 <input readOnly className="flex-1 rounded-lg border bg-gray-50 px-3 py-2 text-xs" value={link} onFocus={(e) => e.target.select()} />
                 <button
-                  className="rounded-lg bg-[#8b3dff] px-3 py-2 font-semibold text-white"
+                  className="rounded-lg bg-brand px-3 py-2 font-semibold text-white"
                   onClick={() => navigator.clipboard.writeText(link).then(() => toast('Link copied'))}
                 >
                   Copy

@@ -6,6 +6,7 @@ import { StaticPage } from '../editor/ElementView';
 import { Present } from '../editor/Present';
 import { useAuth } from '../store/auth';
 import { toast } from '../lib/toast';
+import { Logo } from '../components/Logo';
 
 export function SharedPage() {
   const { token } = useParams();
@@ -19,7 +20,7 @@ export function SharedPage() {
   useEffect(() => {
     api.getShared(token!).then((d) => {
       setDesign(d);
-      document.title = `${d.title} – Canvas`;
+      document.title = `${d.title} – Easel`;
     }).catch((e) => setError(e.message));
     const onResize = () => setWidth(window.innerWidth);
     window.addEventListener('resize', onResize);
@@ -40,10 +41,10 @@ export function SharedPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#ebecf0]">
+    <div className="min-h-screen bg-paper">
       <header className="flex items-center gap-3 bg-white px-4 py-3 shadow-sm">
-        <Link to="/" className="bg-gradient-to-r from-[#00c4cc] to-[#7d2ae8] bg-clip-text text-2xl text-transparent" style={{ fontFamily: 'Pacifico' }}>
-          Canvas
+        <Link to="/">
+          <Logo size={22} />
         </Link>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">{design.title}</div>
@@ -53,7 +54,7 @@ export function SharedPage() {
           Present
         </button>
         {design.shareMode === 'template' && (
-          <button className="rounded-lg bg-[#8b3dff] px-3 py-1.5 text-sm font-semibold text-white" onClick={useTemplate}>
+          <button className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white" onClick={useTemplate}>
             Use template
           </button>
         )}

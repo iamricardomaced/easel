@@ -19,7 +19,7 @@ const IconSearch = lazy(() => import('./IconSearch'));
 type PanelId = 'templates' | 'elements' | 'text' | 'brand' | 'uploads' | 'photos' | 'draw' | 'layers' | 'charts';
 
 const TABS: { id: PanelId; label: string; icon: ReactNode }[] = [
-  { id: 'templates', label: 'Design', icon: <LayoutTemplate size={20} /> },
+  { id: 'templates', label: 'Templates', icon: <LayoutTemplate size={20} /> },
   { id: 'elements', label: 'Elements', icon: <Shapes size={20} /> },
   { id: 'text', label: 'Text', icon: <Type size={20} /> },
   { id: 'brand', label: 'Brand', icon: <Palette size={20} /> },
@@ -35,7 +35,7 @@ export function Sidebar() {
   const setTool = useEditor((s) => s.setTool);
   return (
     <div className="flex h-full shrink-0">
-      <nav className="flex w-[72px] flex-col items-center gap-1 bg-[#18191b] py-2">
+      <nav className="flex w-[72px] flex-col items-center gap-1 bg-white border-r py-2">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -44,7 +44,7 @@ export function Sidebar() {
               if (t.id === 'draw') setTool('draw');
               else if (useEditor.getState().tool !== 'select') setTool('select');
             }}
-            className={`flex w-16 flex-col items-center gap-1 rounded-lg py-2 text-[11px] ${panel === t.id ? 'bg-[#252627] text-white' : 'text-gray-400 hover:text-white'}`}
+            className={`flex w-16 flex-col items-center gap-1 rounded-lg py-2 text-[11px] ${panel === t.id ? 'bg-brand/10 text-brand' : 'text-gray-500 hover:text-ink hover:bg-gray-100'}`}
           >
             {t.icon}
             {t.label}
@@ -84,7 +84,7 @@ const H = ({ children }: { children: ReactNode }) => <h3 className="mb-2 mt-4 te
 function Search({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <input
-      className="mb-3 w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm outline-none focus:border-[#8b3dff]"
+      className="mb-3 w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand"
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -113,7 +113,7 @@ function TemplatesPanel() {
                 s.applyTemplate(t.pages, t.width, t.height, e.shiftKey && !blank ? 'append' : 'replace-page');
               }}
             >
-              <div className="overflow-hidden rounded-lg border group-hover:ring-2 group-hover:ring-[#8b3dff]" style={{ width: 148, height: t.height * scale }}>
+              <div className="overflow-hidden rounded-lg border group-hover:ring-2 group-hover:ring-brand" style={{ width: 148, height: t.height * scale }}>
                 <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', width: t.width, height: t.height }}>
                   <StaticPage page={t.pages[0]} width={t.width} height={t.height} />
                 </div>
@@ -227,7 +227,7 @@ function TextPanel() {
   return (
     <>
       <button
-        className="mb-4 w-full rounded-lg bg-[#8b3dff] py-2.5 text-sm font-semibold text-white hover:bg-[#7731d8]"
+        className="mb-4 w-full rounded-lg bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-strong"
         {...addable(() => makeText({ text: 'Your paragraph text', fontSize: 32 }))}
       >
         Add a text box
@@ -320,7 +320,7 @@ function BrandPanel() {
       {editing !== null && kit.colors[editing] && (
         <div className="mt-3 rounded-lg border p-3">
           <ColorPicker value={kit.colors[editing]} onChange={(c) => save({ ...kit, colors: kit.colors.map((x, j) => (j === editing ? c : x)) })} />
-          <button className="mt-2 text-xs text-[#8b3dff]" onClick={() => setEditing(null)}>
+          <button className="mt-2 text-xs text-brand" onClick={() => setEditing(null)}>
             Done
           </button>
         </div>
@@ -358,7 +358,7 @@ function UploadsPanel() {
   };
   return (
     <>
-      <label className="mb-4 block w-full cursor-pointer rounded-lg bg-[#8b3dff] py-2.5 text-center text-sm font-semibold text-white hover:bg-[#7731d8]">
+      <label className="mb-4 block w-full cursor-pointer rounded-lg bg-brand py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-strong">
         {busy ? 'Uploading…' : 'Upload files'}
         <input
           type="file"
@@ -475,7 +475,7 @@ function DrawPanel() {
             ['select', 'Select'],
           ] as const
         ).map(([t, label]) => (
-          <button key={t} className={`rounded-lg border py-3 text-xs ${tool === t ? 'border-[#8b3dff] bg-[#8b3dff]/10' : ''}`} onClick={() => setTool(t)}>
+          <button key={t} className={`rounded-lg border py-3 text-xs ${tool === t ? 'border-brand bg-brand/10' : ''}`} onClick={() => setTool(t)}>
             {label}
           </button>
         ))}
@@ -483,7 +483,7 @@ function DrawPanel() {
       <H>Colour</H>
       <ColorPicker value={penColor} onChange={(c) => setPen(c)} />
       <H>Weight</H>
-      <input type="range" min={1} max={60} value={penWidth} onChange={(e) => setPen(undefined, Number(e.target.value))} className="w-full accent-[#8b3dff]" />
+      <input type="range" min={1} max={60} value={penWidth} onChange={(e) => setPen(undefined, Number(e.target.value))} className="w-full accent-brand" />
       <p className="mt-3 text-xs text-gray-500">Draw directly on the page. The eraser removes whole strokes.</p>
     </>
   );
@@ -521,7 +521,7 @@ function LayersPanel() {
               setDragId(null);
             }}
             onClick={(e) => s.select([el.id], e.shiftKey)}
-            className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-2 text-sm ${selectedIds.includes(el.id) ? 'border-[#8b3dff] bg-[#8b3dff]/5' : 'hover:bg-gray-50'}`}
+            className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-2 text-sm ${selectedIds.includes(el.id) ? 'border-brand bg-brand/5' : 'hover:bg-gray-50'}`}
           >
             <span className="cursor-grab text-gray-400">⋮⋮</span>
             <span className="flex-1 truncate">{label(el)}</span>
