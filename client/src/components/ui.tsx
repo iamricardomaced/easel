@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Fill } from '../types';
 import { DEFAULT_COLORS } from '../lib/presets';
@@ -33,6 +33,14 @@ export function Popover({
     left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
     setPos({ left, top: r.bottom + 8 });
   };
+
+  // Open upwards when there is no room below (e.g. from the timeline).
+  useLayoutEffect(() => {
+    const r = anchorRef.current?.getBoundingClientRect();
+    const h = panelRef.current?.scrollHeight;
+    if (!open || !pos || !r || !h) return;
+    if (pos.top === r.bottom + 8 && pos.top + h > window.innerHeight - 8 && r.top - h - 8 > 8) setPos({ ...pos, top: r.top - h - 8 });
+  }, [open, pos]);
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +82,7 @@ export function Popover({
             ref={panelRef}
             data-crop-ui
             className="fixed z-[70] overflow-auto rounded-xl border bg-white p-3 text-gray-800 shadow-xl"
-            style={{ left: pos.left, top: pos.top, width: Math.min(width, window.innerWidth - 16), maxHeight: `calc(100vh - ${pos.top + 16}px)` }}
+            style={{ left: pos.left, top: pos.top, width: Math.min(width, window.innerWidth - 16), maxHeight: `calc(100vh - ${Math.max(16, pos.top + 16)}px)` }}
           >
             {title && <div className="mb-2 text-sm font-semibold text-gray-800">{title}</div>}
             {typeof children === 'function' ? children(() => setOpen(false)) : children}

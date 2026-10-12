@@ -36,12 +36,11 @@ export const api = {
   getShared: (token: string) => request<Design & { ownerName: string }>(`/api/shared/${token}`),
   copyShared: (token: string) => request<{ id: string }>(`/api/shared/${token}/copy`, json('POST')),
 
-  listUploads: () => request<UploadItem[]>('/api/uploads'),
-  upload: (file: File, width?: number, height?: number) => {
+  listUploads: (kind?: UploadItem['kind']) => request<UploadItem[]>(`/api/uploads${kind ? `?kind=${kind}` : ''}`),
+  upload: (file: File, meta: { width?: number; height?: number; duration?: number; poster?: string } = {}) => {
     const form = new FormData();
+    for (const [k, v] of Object.entries(meta)) if (v) form.append(k, String(v));
     form.append('file', file);
-    if (width) form.append('width', String(width));
-    if (height) form.append('height', String(height));
     return request<UploadItem>('/api/uploads', { method: 'POST', body: form });
   },
   deleteUpload: (id: string) => request<{ ok: true }>(`/api/uploads/${id}`, json('DELETE')),

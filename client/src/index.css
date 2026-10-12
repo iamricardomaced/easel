@@ -25,25 +25,5 @@ button:not(:disabled) {
   cursor: pointer;
 }
 
-/* Element animations used in Present mode. */
-@keyframes anim-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes anim-rise {
-  from { opacity: 0; transform: translateY(40px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes anim-pan {
-  from { opacity: 0; transform: translateX(-60px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes anim-pop {
-  0% { opacity: 0; transform: scale(0.6); }
-  70% { opacity: 1; transform: scale(1.06); }
-  100% { transform: scale(1); }
-}
-@keyframes anim-wipe {
-  from { clip-path: inset(0 100% 0 0); }
-  to { clip-path: inset(0 0 0 0); }
-}
+/* Element animation keyframes are generated in src/lib/motion.ts. */
+

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { DesignDoc, DesignElement, Fill, Page } from '../types';
+import type { AudioTrack, DesignDoc, DesignElement, Fill, Page } from '../types';
 import { cloneElements, clonePage, newPage, uid } from '../lib/factory';
 import { elementAABB, selectionBox } from '../lib/geometry';
 
@@ -77,6 +77,11 @@ interface EditorState {
   setPageField: (patch: Partial<Page>) => void;
   resizeDoc: (width: number, height: number, scaleContent: boolean) => void;
   applyTemplate: (pages: Page[], width: number, height: number, mode: 'replace-page' | 'append') => void;
+  setPageAt: (i: number, patch: Partial<Page>, record?: boolean) => void;
+
+  addAudio: (track: AudioTrack) => void;
+  updateAudio: (id: string, patch: Partial<AudioTrack>, record?: boolean) => void;
+  removeAudio: (id: string) => void;
 }
 
 let clipboard: DesignElement[] = [];
@@ -323,7 +328,7 @@ export const useEditor = create<EditorState>((set, get) => {
     },
     flip: (axis) =>
       get().updateSelected((el) => {
-        if (el.type !== 'image') return {};
+        if (el.type !== 'image' && el.type !== 'video') return {};
         return axis === 'x' ? { flipX: !el.flipX } : { flipY: !el.flipY };
       }),
 
@@ -377,6 +382,16 @@ export const useEditor = create<EditorState>((set, get) => {
         d.width = width;
         d.height = height;
       }),
+    setPageAt: (i, patch, record = true) => get().mutate((d) => Object.assign(d.pages[i], patch), record),
+
+    addAudio: (track) => get().mutate((d) => (d.audio = [...(d.audio ?? []), track])),
+    updateAudio: (id, patch, record = true) =>
+      get().mutate((d) => {
+        const t = d.audio?.find((a) => a.id === id);
+        if (t) Object.assign(t, patch);
+      }, record),
+    removeAudio: (id) => get().mutate((d) => (d.audio = (d.audio ?? []).filter((a) => a.id !== id))),
+
     applyTemplate: (pages, width, height, mode) => {
       const s = get();
       const fresh = pages.map(clonePage);

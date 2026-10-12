@@ -10,6 +10,8 @@ import { useUi, type PanelId } from '../store/ui';
 import type { AnimationKind, DesignElement, ImageElement, TextElement } from '../types';
 import { ColorPicker, Slider } from '../components/ui';
 import { imageFilterCss } from './ElementView';
+import { ANIMATIONS } from '../lib/motion';
+import { TransitionPanel, VideoPanel } from './MediaPanels';
 
 const start = () => useEditor.getState().checkpoint();
 const live = (patch: Partial<DesignElement> | ((el: DesignElement) => Partial<DesignElement>)) =>
@@ -33,10 +35,12 @@ const Label = ({ children }: { children: ReactNode }) => <h3 className="mb-2 mt-
 export function ContextPanel({ panel }: { panel: PanelId }) {
   const selected = useEditor(useShallow((s) => s.selected()));
   if (panel === 'position') return <PositionPanel selected={selected} />;
+  if (panel === 'transition') return <TransitionPanel />;
   if (!selected.length) return <p className="text-sm text-gray-500">Select an element first.</p>;
   if (panel === 'animate') return <AnimatePanel selected={selected} />;
   if (panel === 'effects') return <EffectsPanel selected={selected} />;
   if (panel === 'photo' && selected[0].type === 'image') return <PhotoPanel el={selected[0]} />;
+  if (panel === 'video' && selected[0].type === 'video') return <VideoPanel el={selected[0]} />;
   return null;
 }
 
@@ -176,14 +180,6 @@ export function LayersList() {
 
 // ---------- Animate ----------
 
-const ANIMATIONS: { kind: AnimationKind; label: string }[] = [
-  { kind: 'none', label: 'None' },
-  { kind: 'fade', label: 'Fade' },
-  { kind: 'rise', label: 'Rise' },
-  { kind: 'pan', label: 'Pan' },
-  { kind: 'pop', label: 'Pop' },
-  { kind: 'wipe', label: 'Wipe' },
-];
 
 function AnimationTile({ kind, label, active, onPick }: { kind: AnimationKind; label: string; active: boolean; onPick: () => void }) {
   const [hover, setHover] = useState(0);
@@ -197,7 +193,7 @@ function AnimationTile({ kind, label, active, onPick }: { kind: AnimationKind; l
         <span
           key={hover}
           className="block h-6 w-10 rounded bg-brand"
-          style={{ animation: kind !== 'none' && hover ? `anim-${kind} 700ms both cubic-bezier(.2,.8,.2,1)` : undefined }}
+          style={{ animation: kind !== 'none' && hover ? `anim-${kind} 700ms linear both` : undefined }}
         />
       </span>
       {label}
@@ -220,12 +216,18 @@ function AnimatePanel({ selected }: { selected: DesignElement[] }) {
   return (
     <>
       <PanelHeader title="Animate" />
-      <p className="mb-3 text-xs text-gray-500">Hover to preview. Animations play when you present, in page order.</p>
+      <p className="mb-3 text-xs text-gray-500">Hover to preview. Animations play when you present, play the timeline or download a video, in layer order.</p>
       <div className="grid grid-cols-3 gap-2">
         {ANIMATIONS.map((a) => (
           <AnimationTile key={a.kind} kind={a.kind} label={a.label} active={current === a.kind} onPick={() => pick(a.kind)} />
         ))}
       </div>
+      {current && current !== 'none' && (
+        <label className="mt-4 flex items-center gap-2 text-sm">
+          <input type="checkbox" className="accent-brand" checked={selected.every((e) => e.animateOut)} onChange={(e) => set({ animateOut: e.target.checked })} />
+          Also animate on exit
+        </label>
+      )}
       <button className="mt-4 w-full rounded-lg border py-2 text-sm hover:bg-gray-50" onClick={applyToPage}>
         Apply {current && current !== 'none' ? `“${ANIMATIONS.find((a) => a.kind === current)?.label}”` : 'Fade'} to every element on this page
       </button>

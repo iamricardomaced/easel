@@ -3,8 +3,9 @@ import { useEditor } from '../store/editor';
 import type { DesignElement, ImageElement, ShapeElement, TextElement } from '../types';
 import { ElementBody, elementBoxStyle, fillCss, textStyle } from './ElementView';
 import { elementAABB, intersects, resizeBox, selectionBox, snapBox, type Box, type Guide, type Handle } from '../lib/geometry';
-import { makeDraw, makeImage } from '../lib/factory';
-import { uploadImageFile } from '../lib/upload';
+import { makeDraw } from '../lib/factory';
+import { isMediaFile, uploadFile } from '../lib/upload';
+import { placeUpload } from '../lib/place';
 import { ContextMenu } from './ContextMenu';
 import { useUi } from '../store/ui';
 
@@ -396,19 +397,15 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
       s.addElement(el, { center: false });
       return;
     }
-    const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'));
+    const files = [...e.dataTransfer.files].filter(isMediaFile);
     for (const file of files) {
-      const up = await uploadImageFile(file);
+      const up = await uploadFile(file);
       if (!up) continue;
-      if (imageUnder && files.length === 1) {
+      if (up.kind === 'image' && imageUnder && files.length === 1) {
         s.updateElement(imageUnder.id, { src: up.url, crop: { x: 0, y: 0, w: 1, h: 1 } });
         continue;
       }
-      const k = Math.min(1, (width * 0.6) / up.width, (height * 0.6) / up.height);
-      const el = makeImage(up.url, up.width * k, up.height * k);
-      el.x = x - el.w / 2;
-      el.y = y - el.h / 2;
-      s.addElement(el, { center: false });
+      placeUpload(up, { x, y });
     }
   };
 
@@ -609,6 +606,7 @@ function ElementNode({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const preview = useUi((s) => (s.preview?.id === el.id ? s.preview : null));
+  const videoPlaying = useUi((s) => s.videoPreview === el.id);
 
   // Text boxes grow with their content; keep the stored height in sync.
   useLayoutEffect(() => {
@@ -646,7 +644,7 @@ function ElementNode({
         style={{
           width: '100%',
           height: el.type === 'text' ? 'auto' : '100%',
-          animation: preview ? `anim-${preview.kind} 700ms both cubic-bezier(.2,.8,.2,1)` : undefined,
+          animation: preview ? `anim-${preview.kind} 700ms linear both` : undefined,
         }}
       >
       {editing && el.type === 'text' ? (
@@ -662,6 +660,7 @@ function ElementNode({
         <ElementBody
           el={el}
           editing={editing}
+          media={videoPlaying ? { mode: 'playing', time: 0 } : undefined}
           onTableCell={(r, c, v) => {
             if (el.type !== 'table') return;
             useEditor.getState().updateElement(el.id, { rows: el.rows.map((row, ri) => row.map((cell, ci) => (ri === r && ci === c ? v : cell))) }, false);

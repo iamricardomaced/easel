@@ -38,9 +38,20 @@ interface BaseElement {
   name?: string;
   shadow?: Shadow;
   animation?: AnimationKind;
+  // Play the entrance animation in reverse when the page ends.
+  animateOut?: boolean;
+  link?: string;
 }
 
-export type AnimationKind = 'none' | 'fade' | 'rise' | 'pan' | 'pop' | 'wipe';
+export type AnimationKind =
+  | 'none' | 'fade' | 'rise' | 'pan' | 'pop' | 'wipe' | 'drop' | 'zoom' | 'spin' | 'blur' | 'bounce' | 'tumble';
+
+export type TransitionKind = 'none' | 'dissolve' | 'slide' | 'push' | 'wipe' | 'zoom' | 'circle' | 'flip';
+
+export interface Transition {
+  kind: TransitionKind;
+  duration: number; // seconds
+}
 
 export interface TextElement extends BaseElement {
   type: 'text';
@@ -154,6 +165,23 @@ export interface QrElement extends BaseElement {
   background: string;
 }
 
+export interface VideoElement extends BaseElement {
+  type: 'video';
+  src: string;
+  poster: string; // still frame used in static renders and exports to images
+  duration: number; // length of the source clip in seconds
+  trimStart: number;
+  trimEnd: number; // seconds into the source where playback stops
+  volume: number; // 0..1
+  muted: boolean;
+  loop: boolean;
+  flipX: boolean;
+  flipY: boolean;
+  radius: number;
+  crop: { x: number; y: number; w: number; h: number };
+  frame?: ImageElement['frame'];
+}
+
 export type DesignElement =
   | TextElement
   | ShapeElement
@@ -163,7 +191,8 @@ export type DesignElement =
   | DrawElement
   | TableElement
   | ChartElement
-  | QrElement;
+  | QrElement
+  | VideoElement;
 
 export type ElementType = DesignElement['type'];
 
@@ -173,8 +202,23 @@ export interface Page {
   backgroundImage?: string;
   elements: DesignElement[];
   notes?: string;
-  duration?: number;
+  duration?: number; // seconds this page plays for in videos and autoplay
+  transition?: Transition; // how this page enters from the previous one
   title?: string;
+}
+
+export interface AudioTrack {
+  id: string;
+  src: string;
+  name: string;
+  duration: number; // source length in seconds
+  start: number; // where it begins on the design timeline, seconds
+  trimStart: number;
+  trimEnd: number;
+  volume: number;
+  fadeIn: number;
+  fadeOut: number;
+  loop?: boolean;
 }
 
 export interface DesignDoc {
@@ -182,6 +226,7 @@ export interface DesignDoc {
   height: number;
   unit: 'px' | 'mm' | 'in';
   pages: Page[];
+  audio?: AudioTrack[];
 }
 
 export interface DesignSummary {
@@ -212,6 +257,9 @@ export interface UploadItem {
   filename: string;
   width: number | null;
   height: number | null;
+  kind: 'image' | 'video' | 'audio';
+  duration: number | null;
+  poster: string | null;
 }
 
 export interface BrandKit {

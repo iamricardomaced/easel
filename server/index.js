@@ -58,6 +58,16 @@ db.exec(`
   );
 `);
 
+// Columns added after the first release.
+for (const [table, col, type] of [
+  ['uploads', 'kind', "TEXT NOT NULL DEFAULT 'image'"],
+  ['uploads', 'duration', 'REAL'],
+  ['uploads', 'poster', 'TEXT'],
+]) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+}
+
 const id = () => crypto.randomBytes(9).toString('base64url');
 const now = () => Date.now();
 const SESSION_MS = 30 * 24 * 3600 * 1000;
@@ -265,30 +275,46 @@ app.post('/api/shared/:token/copy', auth, (req, res) => {
 });
 
 // ---------- Uploads ----------
-const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']);
+const ALLOWED_MIME = new Set([
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/ogg', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/webm',
+]);
+const kindOf = (mime) => (mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'image');
 const upload = multer({
   storage: multer.diskStorage({
     destination: UPLOAD_DIR,
     filename: (_req, file, cb) => cb(null, `${id()}${path.extname(file.originalname).toLowerCase().slice(0, 8)}`),
   }),
-  limits: { fileSize: 25 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => cb(null, ALLOWED_MIME.has(file.mimetype)),
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, ALLOWED_MIME.has(file.mimetype.split(';')[0])),
+});
+
+const shapeUpload = (r) => ({
+  id: r.id, url: `/files/${r.stored_name}`, filename: r.filename, width: r.width, height: r.height,
+  kind: r.kind || 'image', duration: r.duration ?? null, poster: r.poster ?? null,
 });
 
 app.post('/api/uploads', auth, upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Upload a PNG, JPEG, GIF, WebP or SVG image' });
+  if (!req.file) return res.status(400).json({ error: 'Upload an image (PNG, JPEG, GIF, WebP, SVG), a video (MP4, WebM, MOV) or audio (MP3, WAV, M4A, OGG)' });
   const uploadId = id();
   const width = Number(req.body.width) || null;
   const height = Number(req.body.height) || null;
-  db.prepare('INSERT INTO uploads (id, owner_id, filename, stored_name, mime, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    uploadId, req.user.id, req.file.originalname, req.file.filename, req.file.mimetype, width, height, now(),
+  const duration = Number(req.body.duration) || null;
+  const poster = typeof req.body.poster === 'string' && req.body.poster.startsWith('data:image/') ? req.body.poster.slice(0, 400000) : null;
+  const mime = req.file.mimetype.split(';')[0];
+  db.prepare('INSERT INTO uploads (id, owner_id, filename, stored_name, mime, width, height, kind, duration, poster, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    uploadId, req.user.id, req.file.originalname, req.file.filename, mime, width, height, kindOf(mime), duration, poster, now(),
   );
-  res.json({ id: uploadId, url: `/files/${req.file.filename}`, filename: req.file.originalname, width, height });
+  res.json(shapeUpload(db.prepare('SELECT * FROM uploads WHERE id = ?').get(uploadId)));
 });
 
 app.get('/api/uploads', auth, (req, res) => {
-  const rows = db.prepare('SELECT * FROM uploads WHERE owner_id = ? ORDER BY created_at DESC').all(req.user.id);
-  res.json(rows.map((r) => ({ id: r.id, url: `/files/${r.stored_name}`, filename: r.filename, width: r.width, height: r.height })));
+  const kind = req.query.kind;
+  const rows = kind
+    ? db.prepare('SELECT * FROM uploads WHERE owner_id = ? AND kind = ? ORDER BY created_at DESC').all(req.user.id, String(kind))
+    : db.prepare('SELECT * FROM uploads WHERE owner_id = ? ORDER BY created_at DESC').all(req.user.id);
+  res.json(rows.map(shapeUpload));
 });
 
 app.delete('/api/uploads/:id', auth, (req, res) => {

@@ -1,5 +1,7 @@
 import { nanoid } from 'nanoid';
 import type {
+  AudioTrack,
+  VideoElement,
   ChartElement,
   DesignDoc,
   DesignElement,
@@ -157,6 +159,31 @@ export function makeChart(chart: ChartElement['chart']): ChartElement {
 
 export function makeQr(value: string): QrElement {
   return { ...base(240, 240), type: 'qr', value, color: '#000000', background: '#ffffff' };
+}
+
+export function makeVideo(src: string, poster: string, duration: number, w: number, h: number, partial: Partial<VideoElement> = {}): VideoElement {
+  return {
+    ...base(w, h),
+    type: 'video',
+    src,
+    poster,
+    duration,
+    trimStart: 0,
+    trimEnd: duration,
+    volume: 1,
+    muted: false,
+    loop: true,
+    flipX: false,
+    flipY: false,
+    radius: 0,
+    crop: { x: 0, y: 0, w: 1, h: 1 },
+    frame: 'none',
+    ...partial,
+  };
+}
+
+export function makeAudioTrack(src: string, name: string, duration: number, partial: Partial<AudioTrack> = {}): AudioTrack {
+  return { id: uid(), src, name, duration, start: 0, trimStart: 0, trimEnd: duration, volume: 0.8, fadeIn: 0.5, fadeOut: 1.5, loop: true, ...partial };
 }
 
 // Deep copy with fresh ids. Elements sharing a group keep sharing a (new) group.

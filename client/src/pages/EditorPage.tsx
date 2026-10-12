@@ -9,9 +9,12 @@ import { Toolbar } from '../editor/Toolbar';
 import { TopBar, type SaveState } from '../editor/TopBar';
 import { BottomBar } from '../editor/BottomBar';
 import { Present } from '../editor/Present';
+import { PlaybackOverlay } from '../editor/PlaybackOverlay';
+import { Recorder } from '../editor/Recorder';
 import { makeThumbnail } from '../lib/export';
-import { makeImage, makeLine, makeShape, makeText } from '../lib/factory';
-import { uploadImageFile } from '../lib/upload';
+import { makeLine, makeShape, makeText } from '../lib/factory';
+import { isMediaFile, uploadFile } from '../lib/upload';
+import { placeUpload } from '../lib/place';
 import type { TextElement } from '../types';
 
 const SAVE_DELAY = 1000;
@@ -139,18 +142,15 @@ export function EditorPage() {
     const onPaste = async (e: ClipboardEvent) => {
       const t = e.target as HTMLElement;
       if (t.isContentEditable || ['INPUT', 'TEXTAREA'].includes(t.tagName)) return;
-      const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
+      const file = [...(e.clipboardData?.files ?? [])].find(isMediaFile);
       if (!file) {
         e.preventDefault();
         useEditor.getState().paste();
         return;
       }
       e.preventDefault();
-      const up = await uploadImageFile(file);
-      if (!up) return;
-      const { doc, addElement } = useEditor.getState();
-      const k = Math.min(1, (doc.width * 0.6) / up.width, (doc.height * 0.6) / up.height);
-      addElement(makeImage(up.url, up.width * k, up.height * k));
+      const up = await uploadFile(file);
+      if (up) placeUpload(up);
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
@@ -166,10 +166,14 @@ export function EditorPage() {
         <Sidebar />
         <div ref={areaRef} className="flex min-w-0 flex-1 flex-col">
           <Toolbar />
-          <Canvas />
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <Canvas />
+            <PlaybackOverlay />
+          </div>
           <BottomBar onFit={fit} onPresent={() => setPresenting(true)} />
         </div>
       </div>
+      <Recorder />
       {presenting && <Present doc={useEditor.getState().doc} start={useEditor.getState().pageIndex} onClose={() => setPresenting(false)} />}
     </div>
   );

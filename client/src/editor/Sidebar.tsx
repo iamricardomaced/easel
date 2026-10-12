@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
-import { BarChart3, Brush, Cloud, Image as ImageIcon, Layers, LayoutTemplate, Palette, Shapes, Type } from 'lucide-react';
+import { BarChart3, Brush, Cloud, Film, Image as ImageIcon, Layers, LayoutTemplate, Music, Palette, Pause, Play, Shapes, Type, Video } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useEditor } from '../store/editor';
 import type { DesignElement, UploadItem } from '../types';
@@ -8,7 +8,10 @@ import { TEMPLATES } from '../lib/templates';
 import { makeChart, makeImage, makeLine, makeQr, makeShape, makeTable, makeText, solid } from '../lib/factory';
 import { SHAPE_KINDS } from '../lib/shapes';
 import { StaticPage } from './ElementView';
-import { uploadImageFile, uploadListeners } from '../lib/upload';
+import { uploadFile, uploadListeners } from '../lib/upload';
+import { placeUpload } from '../lib/place';
+import { MUSIC, MUSIC_SECONDS, resolveMedia } from '../lib/media';
+import { makeAudioTrack, makeVideo } from '../lib/factory';
 import { useBrandKit } from '../store/brand';
 import { ColorPicker } from '../components/ui';
 import { DEFAULT_COLORS } from '../lib/presets';
@@ -26,6 +29,8 @@ const TABS: { id: PanelId; label: string; icon: ReactNode }[] = [
   { id: 'brand', label: 'Brand', icon: <Palette size={20} /> },
   { id: 'uploads', label: 'Uploads', icon: <Cloud size={20} /> },
   { id: 'photos', label: 'Photos', icon: <ImageIcon size={20} /> },
+  { id: 'videos', label: 'Videos', icon: <Film size={20} /> },
+  { id: 'audio', label: 'Audio', icon: <Music size={20} /> },
   { id: 'charts', label: 'Charts', icon: <BarChart3 size={20} /> },
   { id: 'draw', label: 'Draw', icon: <Brush size={20} /> },
   { id: 'layers', label: 'Layers', icon: <Layers size={20} /> },
@@ -38,11 +43,11 @@ export function Sidebar() {
   const hasSelection = useEditor((s) => s.selectedIds.length > 0);
   // Contextual panels belong to a selection; close them when it goes away.
   useEffect(() => {
-    if (!hasSelection && panel && CONTEXT_PANELS.includes(panel) && panel !== 'position') setPanel(null);
+    if (!hasSelection && panel && CONTEXT_PANELS.includes(panel) && panel !== 'position' && panel !== 'transition') setPanel(null);
   }, [hasSelection, panel, setPanel]);
   return (
     <div className="flex h-full shrink-0">
-      <nav className="flex w-[72px] flex-col items-center gap-1 bg-white border-r py-2">
+      <nav className="flex w-[72px] flex-col items-center gap-1 overflow-y-auto border-r bg-white py-2">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -67,6 +72,8 @@ export function Sidebar() {
             {panel === 'brand' && <BrandPanel />}
             {panel === 'uploads' && <UploadsPanel />}
             {panel === 'photos' && <PhotosPanel />}
+            {panel === 'videos' && <VideosPanel />}
+            {panel === 'audio' && <AudioPanel />}
             {panel === 'charts' && <ChartsPanel />}
             {panel === 'draw' && <DrawPanel />}
             {panel === 'layers' && (
@@ -353,56 +360,187 @@ function BrandPanel() {
   );
 }
 
-function UploadsPanel() {
+function useUploads(kind?: UploadItem['kind']) {
   const [items, setItems] = useState<UploadItem[]>([]);
-  const [busy, setBusy] = useState(false);
-  const refresh = () => api.listUploads().then(setItems).catch(() => {});
   useEffect(() => {
+    const refresh = () => api.listUploads(kind).then(setItems).catch(() => {});
     refresh();
     uploadListeners.add(refresh);
     return () => {
       uploadListeners.delete(refresh);
     };
-  }, []);
+  }, [kind]);
+  return items;
+}
+
+function UploadButton({ accept, label }: { accept: string; label: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <label className="mb-3 block w-full cursor-pointer rounded-lg bg-brand py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-strong">
+      {busy ? 'Uploading…' : label}
+      <input
+        type="file"
+        accept={accept}
+        multiple
+        className="hidden"
+        onChange={async (e) => {
+          setBusy(true);
+          for (const f of [...(e.target.files ?? [])]) await uploadFile(f);
+          setBusy(false);
+          e.target.value = '';
+        }}
+      />
+    </label>
+  );
+}
+
+function UploadTile({ u }: { u: UploadItem }) {
   const doc = useEditor((s) => s.doc);
-  const fit = (w: number, h: number) => {
-    const k = Math.min(1, (doc.width * 0.6) / w, (doc.height * 0.6) / h);
-    return [w * k, h * k] as const;
+  const k = Math.min(1, (doc.width * 0.6) / (u.width ?? 400), (doc.height * 0.6) / (u.height ?? 400));
+  const drag =
+    u.kind === 'audio'
+      ? { onClick: () => placeUpload(u) }
+      : {
+          draggable: true,
+          onDragStart: (e: DragEvent) =>
+            e.dataTransfer.setData(
+              'application/x-design-element',
+              JSON.stringify(u.kind === 'video' ? makeVideo(u.url, u.poster ?? '', u.duration ?? 5, (u.width ?? 400) * k, (u.height ?? 400) * k) : makeImage(u.url, (u.width ?? 400) * k, (u.height ?? 400) * k)),
+            ),
+          onClick: () => placeUpload(u),
+        };
+  return (
+    <div className="group relative mb-2 break-inside-avoid">
+      {u.kind === 'audio' ? (
+        <button className="flex w-full items-center gap-2 rounded-md border bg-gray-50 p-2 text-left text-xs hover:bg-gray-100" {...drag}>
+          <Music size={16} className="shrink-0 text-brand" />
+          <span className="truncate">{u.filename}</span>
+        </button>
+      ) : (
+        <div className="relative">
+          <img src={u.kind === 'video' ? (u.poster ?? '') : u.url} alt={u.filename} className="w-full cursor-pointer rounded-md bg-gray-100 hover:opacity-90" style={{ aspectRatio: u.width && u.height ? `${u.width}/${u.height}` : undefined }} {...drag} />
+          {u.kind === 'video' && (
+            <span className="pointer-events-none absolute bottom-1 left-1 flex items-center gap-0.5 rounded bg-black/60 px-1 text-[10px] text-white">
+              <Video size={10} /> {(u.duration ?? 0).toFixed(1)}s
+            </span>
+          )}
+        </div>
+      )}
+      <button
+        className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 text-xs text-white group-hover:block"
+        onClick={() => api.deleteUpload(u.id).then(() => uploadListeners.forEach((f) => f()))}
+      >
+        Delete
+      </button>
+    </div>
+  );
+}
+
+function UploadsPanel() {
+  const items = useUploads();
+  const [tab, setTab] = useState<'all' | UploadItem['kind']>('all');
+  const shown = tab === 'all' ? items : items.filter((u) => u.kind === tab);
+  return (
+    <>
+      <UploadButton accept="image/*,video/*,audio/*" label="Upload files" />
+      <button className="mb-3 w-full rounded-lg border py-2 text-sm font-medium hover:bg-gray-50" onClick={() => useUi.getState().setRecorder(true)}>
+        Record yourself
+      </button>
+      <div className="mb-3 flex gap-1 text-xs">
+        {(['all', 'image', 'video', 'audio'] as const).map((t) => (
+          <button key={t} className={`rounded-full px-3 py-1 capitalize ${tab === t ? 'bg-ink text-white' : 'bg-gray-100 hover:bg-gray-200'}`} onClick={() => setTab(t)}>
+            {t === 'all' ? 'All' : `${t}s`}
+          </button>
+        ))}
+      </div>
+      <p className="mb-3 text-xs text-gray-500">Images, videos and audio. You can also drag files from your computer straight onto the page.</p>
+      <div className="columns-2 gap-2">
+        {shown.map((u) => (
+          <UploadTile key={u.id} u={u} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function VideosPanel() {
+  const items = useUploads('video');
+  return (
+    <>
+      <UploadButton accept="video/mp4,video/webm,video/quicktime" label="Upload videos" />
+      <button className="mb-4 w-full rounded-lg border py-2 text-sm font-medium hover:bg-gray-50" onClick={() => useUi.getState().setRecorder(true)}>
+        Record yourself
+      </button>
+      <H>Your videos</H>
+      {!items.length && <p className="text-xs text-gray-500">Upload an MP4, WebM or MOV, or record your camera or screen. Videos play in Present and in MP4 downloads.</p>}
+      <div className="columns-2 gap-2">
+        {items.map((u) => (
+          <UploadTile key={u.id} u={u} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function AudioPanel() {
+  const items = useUploads('audio');
+  const [playing, setPlaying] = useState<string | null>(null);
+  const [player] = useState(() => new Audio());
+  useEffect(() => () => player.pause(), [player]);
+  const preview = async (src: string) => {
+    if (playing === src) {
+      player.pause();
+      setPlaying(null);
+      return;
+    }
+    setPlaying(src);
+    player.src = await resolveMedia(src);
+    player.currentTime = 0;
+    player.play().catch(() => {});
+    player.onended = () => setPlaying(null);
+  };
+  const add = (src: string, name: string, duration: number) => {
+    const s = useEditor.getState();
+    s.addAudio(makeAudioTrack(src, name, duration));
   };
   return (
     <>
-      <label className="mb-4 block w-full cursor-pointer rounded-lg bg-brand py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-strong">
-        {busy ? 'Uploading…' : 'Upload files'}
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={async (e) => {
-            setBusy(true);
-            for (const f of [...(e.target.files ?? [])]) await uploadImageFile(f);
-            setBusy(false);
-            e.target.value = '';
-          }}
-        />
-      </label>
-      <p className="mb-3 text-xs text-gray-500">You can also drag images from your computer straight onto the page.</p>
-      <div className="columns-2 gap-2">
-        {items.map((u) => {
-          const [w, h] = fit(u.width ?? 400, u.height ?? 400);
-          return (
-            <div key={u.id} className="group relative mb-2 break-inside-avoid">
-              <img src={u.url} alt={u.filename} className="w-full cursor-pointer rounded-md hover:opacity-90" {...addable(() => makeImage(u.url, w, h))} />
-              <button
-                className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 text-xs text-white group-hover:block"
-                onClick={() => api.deleteUpload(u.id).then(refresh)}
-              >
-                Delete
-              </button>
-            </div>
-          );
-        })}
+      <UploadButton accept="audio/*" label="Upload audio" />
+      <H>Music</H>
+      <p className="mb-2 text-xs text-gray-500">Click a track to add it to the timeline. It loops to the end of the design and fades out.</p>
+      <div className="space-y-1.5">
+        {MUSIC.map((m) => (
+          <div key={m.id} className="flex items-center gap-2 rounded-lg border p-2 hover:bg-gray-50">
+            <button className="rounded-full bg-ink p-1.5 text-white" onClick={() => preview(`synth:${m.id}`)} aria-label={`Preview ${m.name}`}>
+              {playing === `synth:${m.id}` ? <Pause size={12} /> : <Play size={12} />}
+            </button>
+            <button className="flex-1 text-left" onClick={() => add(`synth:${m.id}`, m.name, MUSIC_SECONDS)} data-testid={`music-${m.id}`}>
+              <div className="text-sm font-medium">{m.name}</div>
+              <div className="text-[11px] text-gray-500">
+                {m.mood} · {m.bpm} BPM · 0:{MUSIC_SECONDS}
+              </div>
+            </button>
+          </div>
+        ))}
       </div>
+      {items.length > 0 && (
+        <>
+          <H>Your audio</H>
+          <div className="space-y-1.5">
+            {items.map((u) => (
+              <div key={u.id} className="flex items-center gap-2 rounded-lg border p-2 hover:bg-gray-50">
+                <button className="rounded-full bg-ink p-1.5 text-white" onClick={() => preview(u.url)}>
+                  {playing === u.url ? <Pause size={12} /> : <Play size={12} />}
+                </button>
+                <button className="flex-1 truncate text-left text-sm" onClick={() => placeUpload(u)}>
+                  {u.filename}
+                  <span className="ml-1 text-[11px] text-gray-500">{(u.duration ?? 0).toFixed(0)}s</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

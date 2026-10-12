@@ -1,4 +1,4 @@
-import { memo, useMemo, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { icons } from 'lucide-react';
 import QRCode from 'qrcode';
 import type {
@@ -13,8 +13,10 @@ import type {
   ShapeElement,
   TableElement,
   TextElement,
+  VideoElement,
 } from '../types';
 import { frameStyle, shapePath } from '../lib/shapes';
+import { animationOrder, clipTime, elementMotion, motionCss, pageSeconds } from '../lib/motion';
 
 export function fillCss(fill: Fill): string {
   if (fill.type === 'linear') return `linear-gradient(${fill.angle ?? 135}deg, ${fill.color}, ${fill.color2 ?? fill.color})`;
@@ -187,6 +189,63 @@ function ImageBody({ el }: { el: ImageElement }) {
       {el.border?.width ? (
         <div style={{ position: 'absolute', inset: 0, borderRadius: el.radius, boxShadow: `inset 0 0 0 ${el.border.width}px ${el.border.color}` }} />
       ) : null}
+    </div>
+  );
+}
+
+// How a video element shows: a still frame (thumbnails, image exports), paused at a
+// point in time (timeline scrubbing) or playing.
+export interface MediaMode {
+  mode: 'still' | 'paused' | 'playing';
+  time: number; // seconds since the element's page started
+}
+
+function VideoBody({ el, media }: { el: VideoElement; media?: MediaMode }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const mode = media?.mode ?? 'still';
+  const t = media?.time ?? 0;
+  const target = clipTime(el, t);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    v.volume = Math.max(0, Math.min(1, el.volume));
+    v.muted = el.muted || mode !== 'playing';
+    if (mode === 'paused') {
+      v.pause();
+      if (Math.abs(v.currentTime - target) > 0.04) v.currentTime = target;
+    } else if (mode === 'playing') {
+      if (Math.abs(v.currentTime - target) > 0.35) v.currentTime = target;
+      if (v.paused) v.play().catch(() => {});
+    }
+  }, [mode, target, el.volume, el.muted]);
+  useEffect(() => () => ref.current?.pause(), []);
+  // Keep native playback inside the trimmed range.
+  const onTime = () => {
+    const v = ref.current;
+    if (!v || mode !== 'playing' || v.currentTime < el.trimEnd) return;
+    if (el.loop) v.currentTime = el.trimStart;
+    else v.pause();
+  };
+  const c = el.crop;
+  const media_ = {
+    position: 'absolute' as const,
+    left: `${c.x * 100}%`,
+    top: `${c.y * 100}%`,
+    width: `${c.w * 100}%`,
+    height: `${c.h * 100}%`,
+    objectFit: 'cover' as const,
+    maxWidth: 'none',
+    transform: `scale(${el.flipX ? -1 : 1}, ${el.flipY ? -1 : 1})`,
+    pointerEvents: 'none' as const,
+    userSelect: 'none' as const,
+  };
+  return (
+    <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', borderRadius: el.radius, background: '#000', ...frameStyle(el.frame) }}>
+      {mode === 'still' ? (
+        <img src={el.poster} alt="" draggable={false} style={media_} />
+      ) : (
+        <video ref={ref} src={el.src} poster={el.poster} crossOrigin="anonymous" playsInline preload="auto" muted style={media_} onTimeUpdate={onTime} />
+      )}
     </div>
   );
 }
@@ -369,8 +428,20 @@ function QrBody({ el }: { el: QrElement }) {
   );
 }
 
-export function ElementBody({ el, editing, onTableCell }: { el: DesignElement; editing?: boolean; onTableCell?: (r: number, c: number, v: string) => void }) {
+export function ElementBody({
+  el,
+  editing,
+  onTableCell,
+  media,
+}: {
+  el: DesignElement;
+  editing?: boolean;
+  onTableCell?: (r: number, c: number, v: string) => void;
+  media?: MediaMode;
+}) {
   switch (el.type) {
+    case 'video':
+      return <VideoBody el={el} media={media} />;
     case 'text':
       return <TextBody el={el} />;
     case 'shape':
@@ -439,7 +510,7 @@ export const StaticPage = memo(function StaticPage({
               height: '100%',
               animation:
                 animate && el.animation && el.animation !== 'none'
-                  ? `anim-${el.animation} 700ms ${i * 90}ms both cubic-bezier(.2,.8,.2,1)`
+                  ? `anim-${el.animation} 700ms ${i * 90}ms linear both`
                   : undefined,
             }}
           >
@@ -450,3 +521,24 @@ export const StaticPage = memo(function StaticPage({
     </div>
   );
 });
+
+// A page at a moment in time: entrance/exit animations applied and videos synced.
+// Used by the timeline player and Present.
+export function TimedPage({ page, width, height, time, playing }: { page: Page; width: number; height: number; time: number; playing: boolean }) {
+  const order = useMemo(() => animationOrder(page), [page]);
+  const secs = pageSeconds(page);
+  return (
+    <div style={{ position: 'relative', width, height, overflow: 'hidden', background: fillCss(page.background) }}>
+      {page.backgroundImage && (
+        <img src={page.backgroundImage} crossOrigin="anonymous" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+      )}
+      {page.elements.map((el) => (
+        <div key={el.id} style={elementBoxStyle(el)}>
+          <div style={{ width: '100%', height: '100%', ...motionCss(elementMotion(el, order.get(el.id) ?? -1, time, secs)) }}>
+            <ElementBody el={el} media={{ mode: playing ? 'playing' : 'paused', time }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

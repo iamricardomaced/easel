@@ -1,15 +1,15 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, CaseUpper, ChevronDown,
   Copy, FlipHorizontal2, FlipVertical2, Group, Italic, List, ListOrdered, Lock, LockOpen, Minus, Plus,
-  Strikethrough, Trash2, Underline, Ungroup,
+  Pause, Play, Strikethrough, Trash2, Underline, Ungroup, Volume2, VolumeX, ArrowRightLeft, Clock,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useEditor } from '../store/editor';
 import { useUi, type PanelId } from '../store/ui';
 import type {
   ChartElement, DesignElement, DrawElement, IconElement, ImageElement, LineElement, QrElement,
-  ShapeElement, TableElement, TextElement,
+  ShapeElement, TableElement, TextElement, VideoElement,
 } from '../types';
 import { ColorButton, ColorPicker, Popover, Slider, ToolButton } from '../components/ui';
 import { FONTS } from '../lib/fonts';
@@ -42,6 +42,7 @@ export function Toolbar() {
       {same && el.type === 'table' && <TableTools el={el} />}
       {same && el.type === 'chart' && <ChartTools el={el} />}
       {same && el.type === 'qr' && <QrTools el={el} />}
+      {same && el.type === 'video' && <VideoTools el={el} />}
       <div className="flex-1" />
       <CommonTools selected={selected} />
     </div>
@@ -73,6 +74,27 @@ function PageToolbar() {
         onFocus={start}
         onChange={(e) => useEditor.getState().mutate((d) => (d.pages[useEditor.getState().pageIndex].title = e.target.value), false)}
       />
+      <Sep />
+      <label className="flex items-center gap-1 text-xs text-gray-600" title="How long this page plays in videos and autoplay">
+        <Clock size={14} />
+        <input
+          type="number"
+          min={1}
+          max={120}
+          step={0.5}
+          className="w-14 rounded border px-1 py-0.5"
+          value={page.duration ?? 5}
+          onFocus={start}
+          onChange={(e) => s.setPageAt(s.pageIndex, { duration: Math.max(1, Math.min(120, Number(e.target.value) || 5)) }, false)}
+        />
+        s
+      </label>
+      {s.pageIndex > 0 && (
+        <ToolButton title="Transition from the previous page" onClick={() => useUi.getState().openTransition(useEditor.getState().pageIndex)}>
+          <ArrowRightLeft size={14} />
+          <span className="ml-1">{page.transition && page.transition.kind !== 'none' ? page.transition.kind : 'Transition'}</span>
+        </ToolButton>
+      )}
       <span className="text-xs text-gray-400">Click an element to edit it</span>
     </div>
   );
@@ -428,6 +450,35 @@ function QrTools({ el }: { el: QrElement }) {
 
 
 // Toolbar buttons that open a contextual side panel, like Canva's Animate/Position.
+function VideoTools({ el }: { el: VideoElement }) {
+  const playing = useUi((s) => s.videoPreview === el.id);
+  useEffect(() => () => useUi.getState().setVideoPreview(null), [el.id]);
+  return (
+    <>
+      <ToolButton title={playing ? 'Pause' : 'Play'} active={playing} onClick={() => useUi.getState().setVideoPreview(playing ? null : el.id)}>
+        {playing ? <Pause size={16} /> : <Play size={16} />}
+      </ToolButton>
+      <PanelButton panel="video" title="Trim, volume and playback">Edit video</PanelButton>
+      <ToolButton title={el.muted ? 'Unmute' : 'Mute'} onClick={() => set({ muted: !el.muted })}>
+        {el.muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+      </ToolButton>
+      <span className="px-1 text-xs tabular-nums text-gray-500">{(el.trimEnd - el.trimStart).toFixed(1)}s</span>
+      <ToolButton title="Flip horizontal" onClick={() => useEditor.getState().flip('x')}><FlipHorizontal2 size={16} /></ToolButton>
+      <ToolButton title="Flip vertical" onClick={() => useEditor.getState().flip('y')}><FlipVertical2 size={16} /></ToolButton>
+      <Popover title="Frame & corners" width={260} trigger={() => <ToolButton title="Frame">Frame</ToolButton>}>
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          {(['none', 'circle', 'heart', 'star', 'hexagon', 'triangle'] as const).map((fr) => (
+            <button key={fr} className={`rounded border p-1 text-xs capitalize ${(el.frame ?? 'none') === fr ? 'border-brand' : ''}`} onClick={() => set({ frame: fr })}>
+              {fr}
+            </button>
+          ))}
+        </div>
+        <Slider label="Corner rounding" value={el.radius} min={0} max={Math.min(el.w, el.h) / 2} onStart={start} onChange={(v) => live({ radius: v })} />
+      </Popover>
+    </>
+  );
+}
+
 function PanelButton({ panel, title, children }: { panel: PanelId; title: string; children: ReactNode }) {
   const active = useUi((s) => s.panel === panel);
   return (

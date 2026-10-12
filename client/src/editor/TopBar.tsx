@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Cloud, CloudOff, Download, Play, Redo2, Share2, Undo2 } from 'lucide-react';
 import { useEditor } from '../store/editor';
@@ -9,6 +9,8 @@ import { api } from '../api';
 import { toast } from '../lib/toast';
 import { MOD } from './ContextMenu';
 import { Logo } from '../components/Logo';
+import { formatTime, pageSeconds } from '../lib/motion';
+import type { VideoProgress, VideoQuality } from '../lib/video';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved' | 'error';
 
@@ -153,39 +155,91 @@ function ResizeModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+type DownloadFormat = ExportFormat | 'mp4' | 'gif';
+
+const FORMATS: { id: DownloadFormat; label: string; hint: string }[] = [
+  { id: 'png', label: 'PNG', hint: 'Best for complex images and illustrations' },
+  { id: 'jpg', label: 'JPG', hint: 'Small file size, good for sharing' },
+  { id: 'pdf', label: 'PDF Standard', hint: 'Documents, emailing and printing' },
+  { id: 'svg', label: 'SVG', hint: 'Vector, sharp at any size' },
+  { id: 'mp4', label: 'MP4 Video', hint: 'High quality video with animations, transitions and audio' },
+  { id: 'gif', label: 'GIF', hint: 'Short animated clip, no sound' },
+];
+
+function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 function DownloadModal({ onClose }: { onClose: () => void }) {
   const doc = useEditor((s) => s.doc);
   const title = useEditor((s) => s.title);
   const pageIndex = useEditor((s) => s.pageIndex);
-  const [format, setFormat] = useState<ExportFormat>('png');
+  const moving = doc.pages.some((p) => p.elements.some((e) => e.type === 'video' || (e.animation && e.animation !== 'none')) || (p.transition && p.transition.kind !== 'none')) || !!doc.audio?.length;
+  const [format, setFormat] = useState<DownloadFormat>(moving ? 'mp4' : 'png');
   const [which, setWhich] = useState<'all' | 'current'>('all');
   const [scale, setScale] = useState(1);
   const [transparent, setTransparent] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
+  const [quality, setQuality] = useState<VideoQuality>(1080);
+  const [progress, setProgress] = useState<{ label: string; pct: number } | null>(null);
+  const abort = useRef<AbortController | null>(null);
+  const timed = format === 'mp4' || format === 'gif';
   const run = async () => {
     const pages = which === 'all' ? doc.pages.map((_, i) => i) : [pageIndex];
-    setProgress('Preparing…');
+    const subset = { ...doc, pages: pages.map((i) => doc.pages[i]) };
+    setProgress({ label: 'Preparing…', pct: 0 });
+    abort.current = new AbortController();
+    const report = (p: VideoProgress) => setProgress({ label: `${p.phase}…`, pct: p.total ? p.done / p.total : 0 });
+    const name = (title.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'design');
     try {
-      await exportDesign(doc, title, format, pages, scale, transparent, (d, t) => setProgress(`Rendering ${d}/${t}…`));
+      if (format === 'mp4') {
+        const { exportVideo } = await import('../lib/video');
+        const { blob, ext } = await exportVideo(subset, quality, report, abort.current.signal);
+        saveBlob(blob, `${name}.${ext}`);
+        if (ext !== 'mp4') toast('This browser cannot encode MP4, so the video was saved as WebM');
+      } else if (format === 'gif') {
+        const { exportGif } = await import('../lib/video');
+        saveBlob(await exportGif(subset, 640, report, abort.current.signal), `${name}.gif`);
+      } else {
+        await exportDesign(doc, title, format, pages, scale, transparent, (d, t) => setProgress({ label: `Rendering ${d}/${t}…`, pct: d / t }));
+      }
       toast('Download ready');
       onClose();
     } catch (err) {
-      toast(`Export failed: ${(err as Error).message}`, 'error');
+      if ((err as Error).name !== 'AbortError') toast(`Export failed: ${(err as Error).message}`, 'error');
       setProgress(null);
     }
   };
+  const seconds = (which === 'all' ? doc.pages : [doc.pages[pageIndex]]).reduce((s, p) => s + pageSeconds(p), 0);
   return (
-    <Modal title="Download" onClose={onClose} width={400}>
+    <Modal title="Download" onClose={() => { abort.current?.abort(); onClose(); }} width={440}>
       <div className="space-y-4 text-sm text-gray-800">
-        <label className="block">
+        <div>
           File type
-          <select className="mt-1 w-full rounded-lg border px-3 py-2" value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
-            <option value="png">PNG (best for images)</option>
-            <option value="jpg">JPG (small file size)</option>
-            <option value="pdf">PDF (documents, print)</option>
-            <option value="svg">SVG (vector)</option>
-          </select>
-        </label>
+          <div className="mt-1 grid grid-cols-2 gap-1.5" data-testid="download-formats">
+            {FORMATS.map((f) => (
+              <button
+                key={f.id}
+                disabled={!!progress}
+                className={`rounded-lg border px-3 py-2 text-left ${format === f.id ? 'border-brand bg-brand/5' : 'hover:bg-gray-50'}`}
+                onClick={() => setFormat(f.id)}
+                data-format={f.id}
+              >
+                <div className="font-medium">
+                  {f.label}
+                  {moving && f.id === 'mp4' && <span className="ml-1 rounded bg-brand px-1 text-[10px] font-semibold text-white">Suggested</span>}
+                </div>
+                <div className="text-[11px] leading-tight text-gray-500">{f.hint}</div>
+              </button>
+            ))}
+          </div>
+        </div>
         {(format === 'png' || format === 'jpg') && (
           <label className="block">
             Size × {scale} ({Math.round(doc.width * scale)} × {Math.round(doc.height * scale)} px)
@@ -197,6 +251,22 @@ function DownloadModal({ onClose }: { onClose: () => void }) {
             <input type="checkbox" checked={transparent} onChange={(e) => setTransparent(e.target.checked)} /> Transparent background
           </label>
         )}
+        {format === 'mp4' && (
+          <label className="block">
+            Quality
+            <select className="mt-1 w-full rounded-lg border px-3 py-2" value={quality} onChange={(e) => setQuality(Number(e.target.value) as VideoQuality)}>
+              <option value={480}>480p</option>
+              <option value={720}>720p HD</option>
+              <option value={1080}>1080p Full HD</option>
+              <option value={2160}>4K</option>
+            </select>
+          </label>
+        )}
+        {timed && (
+          <p className="text-xs text-gray-500">
+            {formatTime(seconds)} long. Change page durations, transitions and music in the Timeline at the bottom of the editor.
+          </p>
+        )}
         {doc.pages.length > 1 && (
           <label className="block">
             Pages
@@ -206,9 +276,21 @@ function DownloadModal({ onClose }: { onClose: () => void }) {
             </select>
           </label>
         )}
-        <button disabled={!!progress} className="w-full rounded-lg bg-brand py-2.5 font-semibold text-white disabled:opacity-60" onClick={run}>
-          {progress ?? 'Download'}
-        </button>
+        {progress && (
+          <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+            <div className="h-full bg-brand transition-[width]" style={{ width: `${Math.round(progress.pct * 100)}%` }} />
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button disabled={!!progress} className="flex-1 rounded-lg bg-brand py-2.5 font-semibold text-white disabled:opacity-60" onClick={run} data-testid="download-run">
+            {progress?.label ?? 'Download'}
+          </button>
+          {progress && timed && (
+            <button className="rounded-lg border px-4" onClick={() => abort.current?.abort()}>
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
     </Modal>
   );
