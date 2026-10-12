@@ -105,9 +105,9 @@ export interface Guide {
 }
 
 // Snap a moving box to page edges/centre and other element edges/centres.
-export function snapBox(box: Box, targets: Box[], page: { w: number; h: number }, threshold: number) {
-  const xs = [0, page.w / 2, page.w];
-  const ys = [0, page.h / 2, page.h];
+export function snapBox(box: Box, targets: Box[], page: { w: number; h: number }, threshold: number, lines?: { x: number[]; y: number[] }) {
+  const xs = [0, page.w / 2, page.w, ...(lines?.x ?? [])];
+  const ys = [0, page.h / 2, page.h, ...(lines?.y ?? [])];
   for (const t of targets) {
     xs.push(t.x, t.x + t.w / 2, t.x + t.w);
     ys.push(t.y, t.y + t.h / 2, t.y + t.h);

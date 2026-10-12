@@ -11,6 +11,8 @@ import { BottomBar } from '../editor/BottomBar';
 import { Present } from '../editor/Present';
 import { PlaybackOverlay } from '../editor/PlaybackOverlay';
 import { Recorder } from '../editor/Recorder';
+import { useComments } from '../editor/CollabPanels';
+import { useUi } from '../store/ui';
 import { makeThumbnail } from '../lib/export';
 import { makeLine, makeShape, makeText } from '../lib/factory';
 import { isMediaFile, uploadFile } from '../lib/upload';
@@ -41,6 +43,8 @@ export function EditorPage() {
       .getDesign(id!)
       .then((d) => {
         useEditor.getState().load(d.id, d.title, d.doc);
+        useComments.getState().load(d.id);
+        useUi.setState({ playing: false, time: 0, videoPreview: null });
         document.title = `${d.title} – Easel`;
         setLoaded(true);
       })
@@ -227,6 +231,7 @@ function useShortcuts(fit: () => void, present: () => void) {
       if (e.key === 'ArrowRight') return run(() => s.nudge(step, 0));
       if (e.key === 'ArrowUp') return run(() => s.nudge(0, -step));
       if (e.key === 'ArrowDown') return run(() => s.nudge(0, step));
+      if (e.shiftKey && k === 'r') return; // rulers, handled in the top bar
       if (k === 't') return run(() => s.addElement(makeText({ text: 'Your text here', fontSize: Math.round(s.doc.width / 20) })));
       if (k === 'r') return run(() => s.addElement(makeShape('rect')));
       if (k === 'c') return run(() => s.addElement(makeShape('ellipse')));

@@ -37,6 +37,7 @@ interface BaseElement {
   groupId?: string;
   name?: string;
   shadow?: Shadow;
+  hidden?: boolean;
   animation?: AnimationKind;
   // Play the entrance animation in reverse when the page ends.
   animateOut?: boolean;
@@ -69,7 +70,9 @@ export interface TextElement extends BaseElement {
   letterSpacing: number;
   list?: 'none' | 'bullet' | 'number';
   background?: string;
-  effect?: 'none' | 'outline' | 'neon' | 'lift' | 'hollow';
+  effect?: 'none' | 'outline' | 'neon' | 'lift' | 'hollow' | 'shadow' | 'echo' | 'splice' | 'glitch';
+  effectColor?: string;
+  curve?: number; // -100..100; bends a single line of text along an arc
 }
 
 export interface ShapeElement extends BaseElement {
@@ -108,6 +111,7 @@ export interface ImageElement extends BaseElement {
   crop: { x: number; y: number; w: number; h: number };
   frame?: 'none' | 'circle' | 'star' | 'heart' | 'hexagon' | 'triangle';
   border?: { color: string; width: number };
+  originalSrc?: string; // set after background removal, to undo it
 }
 
 export interface LineElement extends BaseElement {
@@ -204,6 +208,7 @@ export interface Page {
   notes?: string;
   duration?: number; // seconds this page plays for in videos and autoplay
   transition?: Transition; // how this page enters from the previous one
+  hidden?: boolean; // skipped when presenting and downloading
   title?: string;
 }
 
@@ -227,6 +232,7 @@ export interface DesignDoc {
   unit: 'px' | 'mm' | 'in';
   pages: Page[];
   audio?: AudioTrack[];
+  guides?: { x: number[]; y: number[] };
 }
 
 export interface DesignSummary {
@@ -237,6 +243,7 @@ export interface DesignSummary {
   trashedAt: number | null;
   shareToken: string | null;
   shareMode: 'view' | 'template' | null;
+  folderId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -265,4 +272,30 @@ export interface UploadItem {
 export interface BrandKit {
   colors: string[];
   fonts: { heading: string; body: string };
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  count: number;
+  createdAt: number;
+}
+
+export interface VersionSummary {
+  id: string;
+  title: string;
+  name: string | null;
+  thumbnail: string | null;
+  createdAt: number;
+}
+
+export interface Comment {
+  id: string;
+  pageId: string | null;
+  elementId: string | null;
+  parentId: string | null;
+  text: string;
+  resolved: boolean;
+  createdAt: number;
+  author: { id: string; name: string };
 }

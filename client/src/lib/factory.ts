@@ -205,3 +205,35 @@ export function cloneElements(elements: DesignElement[], offset = 0): DesignElem
 export function clonePage(page: Page): Page {
   return { ...structuredClone(page), id: uid(), elements: cloneElements(page.elements) };
 }
+
+// Grey placeholder that photo grids start with; drop a photo on a cell to fill it.
+export const PLACEHOLDER_IMAGE =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#e4e1db"/><g fill="none" stroke="#a8a29e" stroke-width="10" stroke-linejoin="round"><rect x="130" y="140" width="140" height="110" rx="12"/><path d="M140 240l40-45 30 30 20-20 30 35"/></g><circle cx="235" cy="175" r="12" fill="#a8a29e"/></svg>',
+  );
+
+// Cell rectangles (fractions of the page) for each grid layout.
+export const GRID_LAYOUTS: { id: string; label: string; cells: [number, number, number, number][] }[] = [
+  { id: '2col', label: '2 columns', cells: [[0, 0, 0.5, 1], [0.5, 0, 0.5, 1]] },
+  { id: '2row', label: '2 rows', cells: [[0, 0, 1, 0.5], [0, 0.5, 1, 0.5]] },
+  { id: '3col', label: '3 columns', cells: [[0, 0, 1 / 3, 1], [1 / 3, 0, 1 / 3, 1], [2 / 3, 0, 1 / 3, 1]] },
+  { id: '2x2', label: '2 × 2', cells: [[0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5], [0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]] },
+  { id: '1+2', label: '1 + 2', cells: [[0, 0, 0.6, 1], [0.6, 0, 0.4, 0.5], [0.6, 0.5, 0.4, 0.5]] },
+  { id: '2+1', label: '2 + 1', cells: [[0, 0, 0.5, 0.55], [0.5, 0, 0.5, 0.55], [0, 0.55, 1, 0.45]] },
+  { id: '3x3', label: '3 × 3', cells: Array.from({ length: 9 }, (_, i) => [(i % 3) / 3, Math.floor(i / 3) / 3, 1 / 3, 1 / 3] as [number, number, number, number]) },
+  { id: 'feature', label: 'Feature', cells: [[0, 0, 1, 0.65], [0, 0.65, 1 / 3, 0.35], [1 / 3, 0.65, 1 / 3, 0.35], [2 / 3, 0.65, 1 / 3, 0.35]] },
+];
+
+export function makeGrid(layout: string, width: number, height: number, gap = 12): ImageElement[] {
+  const def = GRID_LAYOUTS.find((g) => g.id === layout) ?? GRID_LAYOUTS[0];
+  const group = uid();
+  return def.cells.map(([x, y, w, h]) => {
+    const el = makeImage(PLACEHOLDER_IMAGE, w * width - gap, h * height - gap);
+    el.x = x * width + gap / 2;
+    el.y = y * height + gap / 2;
+    el.groupId = group;
+    el.name = 'Grid cell';
+    return el;
+  });
+}

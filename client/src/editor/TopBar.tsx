@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Cloud, CloudOff, Download, Play, Redo2, Share2, Undo2 } from 'lucide-react';
+import { ChevronLeft, Cloud, CloudOff, Download, MessageSquare, Play, Redo2, Share2, Undo2 } from 'lucide-react';
 import { useEditor } from '../store/editor';
 import { Modal, Popover } from '../components/ui';
-import { SIZE_PRESETS } from '../lib/presets';
 import { exportDesign, type ExportFormat } from '../lib/export';
 import { api } from '../api';
 import { toast } from '../lib/toast';
 import { MOD } from './ContextMenu';
 import { Logo } from '../components/Logo';
+import { VersionHistory, commentOn } from './CollabPanels';
+import { FindReplace, MagicResize } from './Tools';
 import { formatTime, pageSeconds } from '../lib/motion';
 import type { VideoProgress, VideoQuality } from '../lib/video';
 
@@ -20,9 +21,26 @@ export function TopBar({ saveState, onPresent }: { saveState: SaveState; onPrese
   const canRedo = useEditor((s) => s.future.length > 0);
   const showGrid = useEditor((s) => s.showGrid);
   const snapping = useEditor((s) => s.snapping);
-  const [modal, setModal] = useState<'resize' | 'download' | 'share' | 'shortcuts' | null>(null);
+  const showRulers = useEditor((s) => s.showRulers);
+  const [modal, setModal] = useState<'resize' | 'download' | 'share' | 'shortcuts' | 'versions' | 'find' | null>(null);
   const navigate = useNavigate();
   const s = useEditor.getState();
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      const typing = t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName);
+      if (!typing && e.shiftKey && !e.metaKey && !e.ctrlKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        useEditor.getState().toggle('showRulers');
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setModal('find');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const makeCopy = async () => {
     const st = useEditor.getState();
@@ -53,8 +71,12 @@ export function TopBar({ saveState, onPresent }: { saveState: SaveState; onPrese
             {menuItem('Resize design', () => { close(); setModal('resize'); })}
             {menuItem('Make a copy', () => { close(); makeCopy(); })}
             {menuItem('Download', () => { close(); setModal('download'); })}
+            {menuItem('Version history', () => { close(); setModal('versions'); })}
+            {menuItem('Find and replace', () => { close(); setModal('find'); }, `${MOD}F`)}
             <div className="my-1 border-t" />
             {menuItem(`${showGrid ? 'Hide' : 'Show'} grid`, () => s.toggle('showGrid'))}
+            {menuItem(`${showRulers ? 'Hide' : 'Show'} rulers and guides`, () => s.toggle('showRulers'), '⇧R')}
+            {menuItem('Clear guides', () => { close(); s.mutate((d) => (d.guides = { x: [], y: [] })); })}
             {menuItem(`${snapping ? 'Disable' : 'Enable'} snapping`, () => s.toggle('snapping'), 'hold ⌥ to skip')}
             {menuItem('Keyboard shortcuts', () => { close(); setModal('shortcuts'); }, '?')}
           </div>
@@ -77,6 +99,9 @@ export function TopBar({ saveState, onPresent }: { saveState: SaveState; onPrese
         onChange={(e) => s.setTitle(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
       />
+      <button className="rounded-md p-1.5 hover:bg-white/15" title="Comments" onClick={() => commentOn(null)}>
+        <MessageSquare size={18} />
+      </button>
       <button className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium hover:bg-white/15" onClick={onPresent}>
         <Play size={16} /> Present
       </button>
@@ -86,72 +111,13 @@ export function TopBar({ saveState, onPresent }: { saveState: SaveState; onPrese
       <button className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-strong" onClick={() => setModal('share')}>
         <Share2 size={16} /> Share
       </button>
-      {modal === 'resize' && <ResizeModal onClose={() => setModal(null)} />}
+      {modal === 'resize' && <MagicResize onClose={() => setModal(null)} />}
+      {modal === 'find' && <FindReplace onClose={() => setModal(null)} />}
       {modal === 'download' && <DownloadModal onClose={() => setModal(null)} />}
       {modal === 'share' && <ShareModal onClose={() => setModal(null)} />}
       {modal === 'shortcuts' && <ShortcutsModal onClose={() => setModal(null)} />}
+      {modal === 'versions' && <VersionHistory onClose={() => setModal(null)} />}
     </header>
-  );
-}
-
-function ResizeModal({ onClose }: { onClose: () => void }) {
-  const doc = useEditor((s) => s.doc);
-  const [w, setW] = useState(doc.width);
-  const [h, setH] = useState(doc.height);
-  const [scale, setScale] = useState(true);
-  const navigate = useNavigate();
-  const apply = async (copy: boolean) => {
-    const s = useEditor.getState();
-    if (copy) {
-      const prev = structuredClone(s.doc);
-      s.resizeDoc(w, h, scale);
-      const resized = useEditor.getState().doc;
-      const d = await api.createDesign(`${s.title} (${w}×${h})`, resized);
-      useEditor.setState({ doc: prev });
-      navigate(`/design/${d.id}`);
-    } else s.resizeDoc(w, h, scale);
-    onClose();
-  };
-  return (
-    <Modal title="Resize design" onClose={onClose} width={520}>
-      <div className="text-gray-800">
-        <div className="mb-3 flex items-center gap-2 text-sm">
-          <input type="number" className="w-24 rounded border px-2 py-1" value={w} onChange={(e) => setW(Math.max(16, Number(e.target.value)))} />
-          ×
-          <input type="number" className="w-24 rounded border px-2 py-1" value={h} onChange={(e) => setH(Math.max(16, Number(e.target.value)))} />
-          px
-        </div>
-        <div className="mb-3 grid max-h-64 grid-cols-2 gap-1 overflow-auto">
-          {SIZE_PRESETS.map((p) => (
-            <button
-              key={p.id}
-              className={`rounded border px-2 py-1.5 text-left text-xs hover:bg-gray-50 ${p.width === w && p.height === h ? 'border-brand' : ''}`}
-              onClick={() => {
-                setW(p.width);
-                setH(p.height);
-              }}
-            >
-              <div className="font-medium">{p.label}</div>
-              <div className="text-gray-500">
-                {p.width} × {p.height}
-              </div>
-            </button>
-          ))}
-        </div>
-        <label className="mb-4 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={scale} onChange={(e) => setScale(e.target.checked)} />
-          Scale content to fit the new size
-        </label>
-        <div className="flex justify-end gap-2">
-          <button className="rounded-lg border px-4 py-2 text-sm" onClick={() => apply(true)}>
-            Copy &amp; resize
-          </button>
-          <button className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white" onClick={() => apply(false)}>
-            Resize
-          </button>
-        </div>
-      </div>
-    </Modal>
   );
 }
 
@@ -191,7 +157,7 @@ function DownloadModal({ onClose }: { onClose: () => void }) {
   const abort = useRef<AbortController | null>(null);
   const timed = format === 'mp4' || format === 'gif';
   const run = async () => {
-    const pages = which === 'all' ? doc.pages.map((_, i) => i) : [pageIndex];
+    const pages = which === 'all' ? doc.pages.map((_, i) => i).filter((i) => !doc.pages[i].hidden) : [pageIndex];
     const subset = { ...doc, pages: pages.map((i) => doc.pages[i]) };
     setProgress({ label: 'Preparing…', pct: 0 });
     abort.current = new AbortController();
@@ -216,7 +182,7 @@ function DownloadModal({ onClose }: { onClose: () => void }) {
       setProgress(null);
     }
   };
-  const seconds = (which === 'all' ? doc.pages : [doc.pages[pageIndex]]).reduce((s, p) => s + pageSeconds(p), 0);
+  const seconds = (which === 'all' ? doc.pages.filter((p) => !p.hidden) : [doc.pages[pageIndex]]).reduce((s, p) => s + pageSeconds(p), 0);
   return (
     <Modal title="Download" onClose={() => { abort.current?.abort(); onClose(); }} width={440}>
       <div className="space-y-4 text-sm text-gray-800">
@@ -271,7 +237,7 @@ function DownloadModal({ onClose }: { onClose: () => void }) {
           <label className="block">
             Pages
             <select className="mt-1 w-full rounded-lg border px-3 py-2" value={which} onChange={(e) => setWhich(e.target.value as 'all' | 'current')}>
-              <option value="all">All pages ({doc.pages.length})</option>
+              <option value="all">All pages ({doc.pages.filter((p) => !p.hidden).length}{doc.pages.some((p) => p.hidden) ? ', hidden pages skipped' : ''})</option>
               <option value="current">Current page ({pageIndex + 1})</option>
             </select>
           </label>

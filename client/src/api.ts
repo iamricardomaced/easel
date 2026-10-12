@@ -1,4 +1,4 @@
-import type { BrandKit, Design, DesignDoc, DesignSummary, UploadItem, User } from './types';
+import type { BrandKit, Comment, Design, DesignDoc, DesignSummary, Folder, UploadItem, User, VersionSummary } from './types';
 
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {};
@@ -18,13 +18,13 @@ export const api = {
     request<User>('/api/auth/signup', json('POST', { email, name, password })),
   logout: () => request<{ ok: true }>('/api/auth/logout', json('POST')),
 
-  listDesigns: (view: 'all' | 'starred' | 'trash', q = '') =>
-    request<DesignSummary[]>(`/api/designs?view=${view}&q=${encodeURIComponent(q)}`),
+  listDesigns: (view: 'all' | 'starred' | 'trash', q = '', folder?: string) =>
+    request<DesignSummary[]>(`/api/designs?view=${view}&q=${encodeURIComponent(q)}${folder ? `&folder=${folder}` : ''}`),
   createDesign: (title: string, doc: DesignDoc) => request<Design>('/api/designs', json('POST', { title, doc })),
   getDesign: (id: string) => request<Design>(`/api/designs/${id}`),
   updateDesign: (
     id: string,
-    patch: Partial<{ title: string; doc: DesignDoc; thumbnail: string; starred: boolean; trashed: boolean }>,
+    patch: Partial<{ title: string; doc: DesignDoc; thumbnail: string; starred: boolean; trashed: boolean; folderId: string | null }>,
   ) => request<DesignSummary>(`/api/designs/${id}`, json('PATCH', patch)),
   duplicateDesign: (id: string) => request<DesignSummary>(`/api/designs/${id}/duplicate`, json('POST')),
   deleteDesign: (id: string) => request<{ ok: true }>(`/api/designs/${id}`, json('DELETE')),
@@ -44,6 +44,22 @@ export const api = {
     return request<UploadItem>('/api/uploads', { method: 'POST', body: form });
   },
   deleteUpload: (id: string) => request<{ ok: true }>(`/api/uploads/${id}`, json('DELETE')),
+
+  listVersions: (id: string) => request<VersionSummary[]>(`/api/designs/${id}/versions`),
+  getVersion: (id: string, vid: string) => request<VersionSummary & { doc: DesignDoc }>(`/api/designs/${id}/versions/${vid}`),
+  saveVersion: (id: string, name: string) => request<{ id: string }>(`/api/designs/${id}/versions`, json('POST', { name })),
+  restoreVersion: (id: string, vid: string) => request<Design>(`/api/designs/${id}/versions/${vid}/restore`, json('POST')),
+
+  listComments: (id: string) => request<Comment[]>(`/api/designs/${id}/comments`),
+  addComment: (id: string, c: { text: string; pageId?: string; elementId?: string | null; parentId?: string }) =>
+    request<Comment>(`/api/designs/${id}/comments`, json('POST', c)),
+  updateComment: (cid: string, patch: { resolved?: boolean; text?: string }) => request<Comment>(`/api/comments/${cid}`, json('PATCH', patch)),
+  deleteComment: (cid: string) => request<{ ok: true }>(`/api/comments/${cid}`, json('DELETE')),
+
+  listFolders: () => request<Folder[]>('/api/folders'),
+  createFolder: (name: string) => request<Folder>('/api/folders', json('POST', { name })),
+  renameFolder: (fid: string, name: string) => request<{ ok: true }>(`/api/folders/${fid}`, json('PATCH', { name })),
+  deleteFolder: (fid: string) => request<{ ok: true }>(`/api/folders/${fid}`, json('DELETE')),
 
   getBrandKit: () => request<BrandKit>('/api/brand-kit'),
   saveBrandKit: (kit: BrandKit) => request<BrandKit>('/api/brand-kit', json('PUT', kit)),

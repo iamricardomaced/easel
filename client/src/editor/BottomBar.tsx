@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { ArrowRightLeft, Clock, Maximize, Music, Pause, Play, Repeat, StickyNote, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Clock, LayoutGrid, Maximize, Music, Pause, Play, Repeat, StickyNote, Trash2 } from 'lucide-react';
 import { useEditor } from '../store/editor';
 import { useUi } from '../store/ui';
 import type { AudioTrack } from '../types';
 import { StaticPage } from './ElementView';
 import { formatTime, locate, pageSeconds, pageStarts, totalSeconds } from '../lib/motion';
 import { Slider } from '../components/ui';
+import { GridView } from './Tools';
 
 const PPS = 36; // timeline pixels per second
 
@@ -15,6 +16,7 @@ export function BottomBar({ onFit, onPresent }: { onFit: () => void; onPresent: 
   const pageIndex = useEditor((s) => s.pageIndex);
   const playing = useUi((s) => s.playing);
   const [notes, setNotes] = useState(false);
+  const [grid, setGrid] = useState(false);
   const [view, setView] = useState<'none' | 'pages' | 'timeline'>('none');
   const s = useEditor.getState();
   const page = doc.pages[pageIndex];
@@ -55,6 +57,7 @@ export function BottomBar({ onFit, onPresent }: { onFit: () => void; onPresent: 
         </div>
       )}
       {view === 'timeline' && <Timeline />}
+      {grid && <GridView onClose={() => setGrid(false)} />}
       <div className="flex h-10 items-center gap-3 px-4 text-sm text-gray-700">
         <button className={`flex items-center gap-1 rounded px-2 py-1 hover:bg-gray-100 ${notes ? 'text-brand' : ''}`} onClick={() => setNotes(!notes)}>
           <StickyNote size={16} /> Notes
@@ -82,6 +85,9 @@ export function BottomBar({ onFit, onPresent }: { onFit: () => void; onPresent: 
         </button>
         <button className={`rounded px-2 py-1 text-xs hover:bg-gray-100 ${view === 'pages' ? 'text-brand' : ''}`} onClick={() => setView(view === 'pages' ? 'none' : 'pages')}>
           Pages {pageIndex + 1} / {doc.pages.length}
+        </button>
+        <button className="rounded p-1 hover:bg-gray-100" title="Grid view" onClick={() => setGrid(true)} data-testid="grid-toggle">
+          <LayoutGrid size={16} />
         </button>
         <button className="rounded p-1 hover:bg-gray-100" title="Present full screen" onClick={onPresent}>
           <Maximize size={16} />

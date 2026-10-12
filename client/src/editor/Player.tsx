@@ -39,7 +39,7 @@ export function usePlaybackClock(doc: DesignDoc, playing: boolean, time: number,
 }
 
 // The whole design at global time `time`, scaled to fit a `boxW` × `boxH` area.
-export function Player({ doc, time, playing, boxW, boxH }: { doc: DesignDoc; time: number; playing: boolean; boxW: number; boxH: number }) {
+export function Player({ doc, time, playing, boxW, boxH, onLink }: { doc: DesignDoc; time: number; playing: boolean; boxW: number; boxH: number; onLink?: (link: string) => void }) {
   const scale = Math.min(boxW / doc.width, boxH / doc.height);
   const { index, local } = locate(doc, Math.min(time, totalSeconds(doc) - 0.001));
   const page = doc.pages[index];
@@ -78,7 +78,7 @@ export function Player({ doc, time, playing, boxW, boxH }: { doc: DesignDoc; tim
               : undefined,
           }}
         >
-          <TimedPage key={page.id} page={page} width={w} height={h} time={local} playing={playing} />
+          <TimedPage key={page.id} page={page} width={w} height={h} time={local} playing={playing} onLink={onLink} />
         </div>
       </div>
       {(doc.audio ?? []).map((a) => (

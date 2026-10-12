@@ -114,7 +114,7 @@ export function ToolButton({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`flex h-8 min-w-8 items-center justify-center gap-1 rounded-md px-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-40 ${active ? 'bg-brand/10 text-brand' : ''} ${className}`}
+      className={`flex h-8 min-w-8 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-40 ${active ? 'bg-brand/10 text-brand' : ''} ${className}`}
     >
       {children}
     </button>

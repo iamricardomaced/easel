@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { useEditor } from '../store/editor';
 import type { DesignElement, ImageElement, ShapeElement, TextElement } from '../types';
@@ -8,8 +9,11 @@ import { isMediaFile, uploadFile } from '../lib/upload';
 import { placeUpload } from '../lib/place';
 import { ContextMenu } from './ContextMenu';
 import { useUi } from '../store/ui';
+import { CommentBadge } from './CollabPanels';
+import { stylePatch } from '../lib/style';
 
 const EMPTY: string[] = [];
+const NO_GUIDES = { x: [] as number[], y: [] as number[] };
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 const HANDLE_POS: Record<Handle, [number, number]> = {
   nw: [0, 0], n: [0.5, 0], ne: [1, 0], e: [1, 0.5], se: [1, 1], s: [0.5, 1], sw: [0, 1], w: [0, 0.5],
@@ -133,6 +137,7 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
   const editingId = useEditor((s) => s.editingId);
   const tool = useEditor((s) => s.tool);
   const showGrid = useEditor((s) => s.showGrid);
+  const showRulers = useEditor((s) => s.showRulers);
   const pageCount = useEditor((s) => s.doc.pages.length);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -212,6 +217,13 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
     }
     if (s.editingId === el.id) return;
     if (s.editingId) s.setEditing(null);
+    const source = useUi.getState().styleSource;
+    if (source && source.id !== el.id && !el.locked) {
+      s.select([el.id]);
+      s.updateSelected((cur) => stylePatch(source, cur));
+      useUi.getState().setStyleSource(null);
+      return;
+    }
     const wasSelected = s.selectedIds.includes(el.id);
     if (e.shiftKey) s.select([el.id], true);
     else if (!wasSelected) s.select([el.id]);
@@ -238,7 +250,7 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
           useEditor.getState().checkpoint();
         }
         if (useEditor.getState().snapping && !m.altKey) {
-          const snap = snapBox({ ...startBox, x: startBox.x + dx, y: startBox.y + dy }, targets, { w: width, h: height }, 6 / zoom);
+          const snap = snapBox({ ...startBox, x: startBox.x + dx, y: startBox.y + dy }, targets, { w: width, h: height }, 6 / zoom, useEditor.getState().doc.guides);
           dx += snap.dx;
           dy += snap.dy;
           setGuides(snap.guides);
@@ -417,11 +429,12 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
   const cursor = tool === 'draw' || tool === 'highlighter' ? 'crosshair' : tool === 'eraser' ? 'cell' : undefined;
 
   return (
-    <div className="flex flex-col gap-1.5" style={{ width: width * zoom }}>
-      <div className="flex items-center justify-between text-xs text-gray-500">
+    <div className="flex flex-col gap-1.5" style={{ width: width * zoom, marginLeft: showRulers ? 18 : 0 }}>
+      <div className="flex items-center justify-between text-xs text-gray-500" style={{ marginBottom: showRulers ? 18 : 0 }}>
         <span className={active ? 'font-semibold text-gray-700' : ''}>
           Page {index + 1}
           {page.title ? ` – ${page.title}` : ''}
+          {page.hidden ? ' (hidden)' : ''}
         </span>
         <PageActions index={index} count={pageCount} />
       </div>
@@ -543,6 +556,7 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
             )}
           </div>
         )}
+        {showRulers && <Rulers width={width} height={height} zoom={zoom} surface={surfaceRef} />}
         {guides.map((g, i) => (
           <div
             key={i}
@@ -575,14 +589,90 @@ function Outline({ box, zoom, className }: { box: DesignElement; zoom: number; c
   );
 }
 
+// Rulers along the top and left of a page, in design pixels. Drag from a ruler to add a
+// guide; drag a guide off the page to remove it. Guides are saved with the design.
+function Rulers({ width, height, zoom, surface }: { width: number; height: number; zoom: number; surface: React.RefObject<HTMLDivElement | null> }) {
+  const guides = useEditor((s) => s.doc.guides) ?? NO_GUIDES;
+  const step = [10, 20, 50, 100, 200, 500, 1000].find((n) => n * zoom >= 60) ?? 1000;
+  const ticks = (len: number) => Array.from({ length: Math.floor(len / step) + 1 }, (_, i) => i * step);
+  const dragGuide = (axis: 'x' | 'y', index: number | null) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const s = useEditor.getState();
+    s.checkpoint();
+    let i = index;
+    if (i === null) {
+      s.mutate((d) => {
+        d.guides ??= { x: [], y: [] };
+        d.guides[axis].push(-1);
+        i = d.guides[axis].length - 1;
+      }, false);
+    }
+    const move = (m: PointerEvent) => {
+      const r = surface.current!.getBoundingClientRect();
+      const v = axis === 'x' ? (m.clientX - r.left) / zoom : (m.clientY - r.top) / zoom;
+      useEditor.getState().mutate((d) => (d.guides![axis][i!] = Math.round(v)), false);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const max = axis === 'x' ? width : height;
+      useEditor.getState().mutate((d) => {
+        d.guides![axis] = d.guides![axis].filter((v) => v >= 0 && v <= max);
+      }, false);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const tick = 'absolute text-[9px] leading-none text-gray-500';
+  return (
+    <>
+      <div className="absolute -top-[18px] left-0 h-[18px] cursor-row-resize overflow-hidden border-b bg-white" style={{ width: width * zoom }} onPointerDown={dragGuide('y', null)} data-testid="ruler-top">
+        {ticks(width).map((t) => (
+          <span key={t} className={tick} style={{ left: t * zoom + 2, top: 2 }}>
+            <span className="absolute -left-0.5 top-3 h-1 w-px bg-gray-400" />
+            {t}
+          </span>
+        ))}
+      </div>
+      <div className="absolute -left-[18px] top-0 w-[18px] cursor-col-resize overflow-hidden border-r bg-white" style={{ height: height * zoom }} onPointerDown={dragGuide('x', null)} data-testid="ruler-left">
+        {ticks(height).map((t) => (
+          <span key={t} className={tick} style={{ top: t * zoom + 2, left: 1, writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+            {t}
+          </span>
+        ))}
+      </div>
+      {guides.x.map((v, i) => (
+        <div key={`x${i}`} className="absolute top-0 z-10 w-[5px] -translate-x-[2px] cursor-col-resize" style={{ left: v * zoom, height: height * zoom }} onPointerDown={dragGuide('x', i)}>
+          <div className="mx-auto h-full w-px bg-fuchsia-500" />
+        </div>
+      ))}
+      {guides.y.map((v, i) => (
+        <div key={`y${i}`} className="absolute left-0 z-10 h-[5px] -translate-y-[2px] cursor-row-resize" style={{ top: v * zoom, width: width * zoom }} onPointerDown={dragGuide('y', i)}>
+          <div className="my-[2px] h-px w-full bg-fuchsia-500" />
+        </div>
+      ))}
+    </>
+  );
+}
+
 function PageActions({ index, count }: { index: number; count: number }) {
   const s = useEditor.getState();
+  const hidden = useEditor((st) => !!st.doc.pages[index]?.hidden);
   const btn = 'rounded px-1.5 py-0.5 hover:bg-gray-200';
   return (
     <div className="flex items-center gap-0.5">
       <button className={btn} title="Move up" disabled={index === 0} onClick={() => s.movePage(index, index - 1)}>↑</button>
       <button className={btn} title="Move down" disabled={index === count - 1} onClick={() => s.movePage(index, index + 1)}>↓</button>
       <button className={btn} title="Duplicate page" onClick={() => s.duplicatePage(index)}>⧉</button>
+      <button
+        className={btn}
+        title={hidden ? 'Show page' : 'Hide page (skipped when presenting and downloading)'}
+        onClick={() => s.setPageAt(index, { hidden: !hidden })}
+        data-testid={`hide-page-${index}`}
+      >
+        {hidden ? <EyeOff size={13} /> : <Eye size={13} />}
+      </button>
       <button className={btn} title="Delete page" disabled={count === 1} onClick={() => s.deletePage(index)}>🗑</button>
       <button className={btn} title="Add page" onClick={() => s.addPage(index)}>＋</button>
     </div>
@@ -668,6 +758,7 @@ function ElementNode({
         />
       )}
       </div>
+      <CommentBadge elementId={el.id} />
     </div>
   );
 }

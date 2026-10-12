@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import type { AnimationKind } from '../types';
+import type { AnimationKind, DesignElement } from '../types';
 
 // Side-panel routing. The first group are the rail tabs; the second are contextual
 // panels the toolbar opens for the current selection (as Canva does).
 export type PanelId =
   | 'templates' | 'elements' | 'text' | 'brand' | 'uploads' | 'photos' | 'videos' | 'audio' | 'draw' | 'layers' | 'charts'
-  | 'position' | 'animate' | 'effects' | 'photo' | 'video' | 'transition';
+  | 'position' | 'animate' | 'effects' | 'photo' | 'video' | 'transition' | 'comments' | 'styles' | 'apps';
 
 export const CONTEXT_PANELS: PanelId[] = ['position', 'animate', 'effects', 'photo', 'video', 'transition'];
 
@@ -27,6 +27,9 @@ interface UiState {
   // Video element playing inline on the canvas.
   videoPreview: string | null;
   setVideoPreview: (id: string | null) => void;
+  // Element whose style the next click pastes ("Copy style").
+  styleSource: DesignElement | null;
+  setStyleSource: (el: DesignElement | null) => void;
   recorder: boolean;
   setRecorder: (open: boolean) => void;
 }
@@ -49,6 +52,8 @@ export const useUi = create<UiState>((set, get) => ({
   openTransition: (transitionPage) => set({ transitionPage, panel: 'transition' }),
   videoPreview: null,
   setVideoPreview: (videoPreview) => set({ videoPreview }),
+  styleSource: null,
+  setStyleSource: (styleSource) => set({ styleSource }),
   recorder: false,
   setRecorder: (recorder) => set({ recorder }),
 }));

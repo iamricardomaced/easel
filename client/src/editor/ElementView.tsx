@@ -77,8 +77,87 @@ export function textStyle(el: TextElement): CSSProperties {
     case 'lift':
       s.textShadow = `0 ${el.fontSize * 0.08}px ${el.fontSize * 0.25}px rgba(0,0,0,0.35)`;
       break;
+    case 'shadow': {
+      const d = el.fontSize * 0.06;
+      s.textShadow = `${d}px ${d}px 0 ${el.effectColor ?? 'rgba(0,0,0,0.4)'}`;
+      break;
+    }
+    case 'echo': {
+      const d = el.fontSize * 0.05;
+      const c = el.effectColor ?? el.color;
+      s.textShadow = [1, 2, 3].map((k) => `${d * k}px ${d * k}px 0 ${alpha(c, 0.5 / k)}`).join(', ');
+      break;
+    }
+    case 'splice': {
+      const d = el.fontSize * 0.05;
+      s.WebkitTextStroke = `${Math.max(1, el.fontSize / 40)}px ${el.color}`;
+      s.color = 'transparent';
+      s.textShadow = `${d}px ${d}px 0 ${el.effectColor ?? '#ffb347'}`;
+      break;
+    }
+    case 'glitch': {
+      const d = el.fontSize * 0.04;
+      s.textShadow = `${-d}px 0 ${el.effectColor ?? '#00e5ff'}, ${d}px 0 #ff2d75`;
+      break;
+    }
   }
   return s;
+}
+
+// #rrggbb plus an alpha, for effect colours.
+function alpha(color: string, a: number) {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return color;
+  return `${color}${Math.round(a * 255).toString(16).padStart(2, '0')}`;
+}
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+function textWidth(el: TextElement, text: string) {
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  if (!measureCtx) return text.length * el.fontSize * 0.6;
+  measureCtx.font = `${el.italic ? 'italic ' : ''}${el.fontWeight} ${el.fontSize}px '${el.fontFamily}', sans-serif`;
+  return measureCtx.measureText(text).width + el.letterSpacing * text.length;
+}
+
+// Text bent along a circular arc, like Canva's Curve effect.
+function CurvedText({ el }: { el: TextElement }) {
+  const text = (el.uppercase ? el.text.toUpperCase() : el.text).replace(/\n/g, ' ');
+  const fs = el.fontSize;
+  const tw = Math.max(fs, textWidth(el, text));
+  const k = Math.max(-100, Math.min(100, el.curve ?? 0)) / 100;
+  const a = Math.abs(k) * Math.PI * 1.9; // arc angle the text covers
+  const r = tw / a;
+  const W = el.w;
+  const cx = W / 2;
+  const up = k > 0;
+  const cy = up ? fs + r : fs - r * Math.cos(a / 2);
+  const h = up ? fs * 1.4 + r * (1 - Math.cos(a / 2)) : cy + r + fs * 0.4;
+  const t1 = up ? -Math.PI / 2 - a / 2 : Math.PI / 2 + a / 2;
+  const t2 = up ? -Math.PI / 2 + a / 2 : Math.PI / 2 - a / 2;
+  const p = (t: number) => `${cx + r * Math.cos(t)},${cy + r * Math.sin(t)}`;
+  const d = `M${p(t1)} A${r},${r} 0 ${a > Math.PI ? 1 : 0} ${up ? 1 : 0} ${p(t2)}`;
+  const id = `curve-${el.id}`;
+  const hollow = el.effect === 'hollow' || el.effect === 'splice';
+  return (
+    <svg width={W} height={h} style={{ overflow: 'visible', display: 'block' }}>
+      <defs>
+        <path id={id} d={d} />
+      </defs>
+      <text
+        fontFamily={`'${el.fontFamily}', sans-serif`}
+        fontSize={fs}
+        fontWeight={el.fontWeight}
+        fontStyle={el.italic ? 'italic' : 'normal'}
+        letterSpacing={el.letterSpacing}
+        fill={hollow ? 'none' : el.color}
+        stroke={hollow || el.effect === 'outline' ? (el.effect === 'outline' ? '#000' : el.color) : undefined}
+        strokeWidth={hollow || el.effect === 'outline' ? Math.max(1, fs / 30) : undefined}
+      >
+        <textPath href={`#${id}`} startOffset="50%" textAnchor="middle">
+          {text}
+        </textPath>
+      </text>
+    </svg>
+  );
 }
 
 export function textContent(el: TextElement) {
@@ -90,6 +169,7 @@ export function textContent(el: TextElement) {
 }
 
 function TextBody({ el }: { el: TextElement }) {
+  if (el.curve) return <CurvedText el={el} />;
   return <div style={textStyle(el)}>{textContent(el)}</div>;
 }
 
@@ -476,6 +556,26 @@ export function elementBoxStyle(el: DesignElement): CSSProperties {
   };
 }
 
+// Clickable elements in Present and on shared links.
+function linkProps(el: DesignElement, onLink?: (link: string) => void) {
+  if (!el.link || !onLink) return {};
+  return {
+    onClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onLink(el.link!);
+    },
+    title: el.link,
+    'data-link': el.link,
+    style: { ...elementBoxStyle(el), cursor: 'pointer' },
+  };
+}
+
+export function openLink(link: string, goToPage?: (index: number) => void) {
+  const m = /^#(\d+)$/.exec(link);
+  if (m) goToPage?.(Number(m[1]) - 1);
+  else window.open(link, '_blank', 'noopener');
+}
+
 // Static, non-interactive render of a page at its natural size. Used for thumbnails,
 // export, presenting and the read-only share view.
 export const StaticPage = memo(function StaticPage({
@@ -483,11 +583,13 @@ export const StaticPage = memo(function StaticPage({
   width,
   height,
   animate,
+  onLink,
 }: {
   page: Page;
   width: number;
   height: number;
   animate?: boolean;
+  onLink?: (link: string) => void;
 }) {
   return (
     <div
@@ -503,7 +605,7 @@ export const StaticPage = memo(function StaticPage({
         <img src={page.backgroundImage} crossOrigin="anonymous" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       )}
       {page.elements.map((el, i) => (
-        <div key={el.id} style={elementBoxStyle(el)}>
+        <div key={el.id} style={elementBoxStyle(el)} {...linkProps(el, onLink)}>
           <div
             style={{
               width: '100%',
@@ -524,7 +626,21 @@ export const StaticPage = memo(function StaticPage({
 
 // A page at a moment in time: entrance/exit animations applied and videos synced.
 // Used by the timeline player and Present.
-export function TimedPage({ page, width, height, time, playing }: { page: Page; width: number; height: number; time: number; playing: boolean }) {
+export function TimedPage({
+  page,
+  width,
+  height,
+  time,
+  playing,
+  onLink,
+}: {
+  page: Page;
+  width: number;
+  height: number;
+  time: number;
+  playing: boolean;
+  onLink?: (link: string) => void;
+}) {
   const order = useMemo(() => animationOrder(page), [page]);
   const secs = pageSeconds(page);
   return (
@@ -533,7 +649,7 @@ export function TimedPage({ page, width, height, time, playing }: { page: Page; 
         <img src={page.backgroundImage} crossOrigin="anonymous" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       )}
       {page.elements.map((el) => (
-        <div key={el.id} style={elementBoxStyle(el)}>
+        <div key={el.id} style={elementBoxStyle(el)} {...linkProps(el, onLink)}>
           <div style={{ width: '100%', height: '100%', ...motionCss(elementMotion(el, order.get(el.id) ?? -1, time, secs)) }}>
             <ElementBody el={el} media={{ mode: playing ? 'playing' : 'paused', time }} />
           </div>

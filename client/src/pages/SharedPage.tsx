@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import type { Design } from '../types';
-import { StaticPage } from '../editor/ElementView';
+import { StaticPage, openLink } from '../editor/ElementView';
 import { Present } from '../editor/Present';
 import { useAuth } from '../store/auth';
 import { toast } from '../lib/toast';
@@ -60,10 +60,15 @@ export function SharedPage() {
         )}
       </header>
       <div className="flex flex-col items-center gap-6 px-4 py-8">
-        {doc.pages.map((p) => (
-          <div key={p.id} className="overflow-hidden shadow-md" style={{ width: doc.width * k, height: doc.height * k }}>
+        {doc.pages.filter((p) => !p.hidden).map((p) => (
+          <div key={p.id} data-shared-page={doc.pages.indexOf(p)} className="overflow-hidden shadow-md" style={{ width: doc.width * k, height: doc.height * k }}>
             <div style={{ transform: `scale(${k})`, transformOrigin: 'top left' }}>
-              <StaticPage page={p} width={doc.width} height={doc.height} />
+              <StaticPage
+                page={p}
+                width={doc.width}
+                height={doc.height}
+                onLink={(l) => openLink(l, (i) => document.querySelector(`[data-shared-page="${i}"]`)?.scrollIntoView({ behavior: 'smooth' }))}
+              />
             </div>
           </div>
         ))}

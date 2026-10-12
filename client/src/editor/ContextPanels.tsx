@@ -10,6 +10,8 @@ import { useUi, type PanelId } from '../store/ui';
 import type { AnimationKind, DesignElement, ImageElement, TextElement } from '../types';
 import { ColorPicker, Slider } from '../components/ui';
 import { imageFilterCss } from './ElementView';
+import { uploadFile } from '../lib/upload';
+import { toast } from '../lib/toast';
 import { ANIMATIONS } from '../lib/motion';
 import { TransitionPanel, VideoPanel } from './MediaPanels';
 
@@ -248,8 +250,19 @@ const TEXT_STYLES: { id: NonNullable<TextElement['effect']> | 'background'; labe
   { id: 'hollow', label: 'Hollow', preview: { color: 'transparent', WebkitTextStroke: '1.5px #16181d' } },
   { id: 'outline', label: 'Outline', preview: { WebkitTextStroke: '1.5px #000', color: '#ff5c39' } },
   { id: 'neon', label: 'Neon', preview: { color: '#fff', textShadow: '0 0 4px #ff5c39, 0 0 10px #ff5c39, 0 0 18px #ff5c39' } },
+  { id: 'shadow', label: 'Shadow', preview: { textShadow: '3px 3px 0 rgba(0,0,0,.4)' } },
+  { id: 'echo', label: 'Echo', preview: { textShadow: '2px 2px 0 #16181d80, 4px 4px 0 #16181d40, 6px 6px 0 #16181d2a' } },
+  { id: 'splice', label: 'Splice', preview: { color: 'transparent', WebkitTextStroke: '1.5px #16181d', textShadow: '3px 3px 0 #ffb347' } },
+  { id: 'glitch', label: 'Glitch', preview: { textShadow: '-2px 0 #00e5ff, 2px 0 #ff2d75' } },
   { id: 'background', label: 'Background', preview: { background: '#ffde59', padding: '0 6px', borderRadius: 4 } },
 ];
+
+const EFFECT_COLOR_DEFAULT: Partial<Record<NonNullable<TextElement['effect']>, string>> = {
+  shadow: '#00000066',
+  echo: '#16181d',
+  splice: '#ffb347',
+  glitch: '#00e5ff',
+};
 
 function EffectsPanel({ selected }: { selected: DesignElement[] }) {
   const el = selected[0];
@@ -283,6 +296,31 @@ function EffectsPanel({ selected }: { selected: DesignElement[] }) {
             <div className="mt-3">
               <div className="mb-1 text-xs font-medium text-gray-500">Background colour</div>
               <ColorPicker value={text.background} onChange={(c) => set({ background: c })} />
+            </div>
+          )}
+          {text.effect && EFFECT_COLOR_DEFAULT[text.effect] && (
+            <div className="mt-3">
+              <div className="mb-1 text-xs font-medium text-gray-500">Effect colour</div>
+              <ColorPicker value={(text.effectColor ?? EFFECT_COLOR_DEFAULT[text.effect]!).slice(0, 7)} onChange={(c) => set({ effectColor: c })} />
+            </div>
+          )}
+          <Label>Shape</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['none', 'curve'] as const).map((k) => (
+              <button
+                key={k}
+                className={`rounded-xl border p-2 text-xs capitalize ${(k === 'curve') === !!text.curve ? 'border-brand bg-brand/5 font-semibold text-brand' : 'hover:bg-gray-50'}`}
+                onClick={() => set({ curve: k === 'curve' ? 50 : 0 })}
+                data-testid={`text-shape-${k}`}
+              >
+                <span className="mb-1 block text-lg">{k === 'curve' ? '⌒ abc' : 'abc'}</span>
+                {k}
+              </button>
+            ))}
+          </div>
+          {!!text.curve && (
+            <div className="mt-2">
+              <Slider label="Curve" value={text.curve} min={-100} max={100} onStart={start} onChange={(v) => live({ curve: v || 1 })} />
             </div>
           )}
         </>
@@ -327,12 +365,46 @@ const FILTER_PRESETS: { name: string; f: Partial<ImageElement['filters']> }[] = 
   { name: 'Soft', f: { blur: 1, brightness: 105 } },
 ];
 
+function BackgroundRemover({ el }: { el: ImageElement }) {
+  const [busy, setBusy] = useState(false);
+  const [tolerance, setTolerance] = useState(48);
+  const run = async () => {
+    setBusy(true);
+    try {
+      const { removeBackground } = await import('../lib/bgremove');
+      const blob = await removeBackground(el.src, tolerance);
+      const up = await uploadFile(new File([blob], 'background-removed.png', { type: 'image/png' }));
+      if (up) useEditor.getState().updateElement(el.id, { src: up.url, originalSrc: el.originalSrc ?? el.src } as Partial<ImageElement>);
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="mb-2 rounded-xl border p-3">
+      <div className="flex items-center gap-2">
+        <button className="flex-1 rounded-lg bg-ink py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={busy} onClick={run} data-testid="bg-remove">
+          {busy ? 'Removing…' : 'Remove background'}
+        </button>
+        {el.originalSrc && (
+          <button className="rounded-lg border px-3 py-2 text-sm" onClick={() => useEditor.getState().updateElement(el.id, { src: el.originalSrc, originalSrc: undefined } as Partial<ImageElement>)}>
+            Restore
+          </button>
+        )}
+      </div>
+      <Slider label="Tolerance" value={tolerance} min={10} max={120} onChange={setTolerance} />
+      <p className="text-[11px] text-gray-500">Works best on photos taken against a plain background.</p>
+    </div>
+  );
+}
+
 function PhotoPanel({ el }: { el: ImageElement }) {
   const f = el.filters;
   const setF = (patch: Partial<ImageElement['filters']>) => live((e) => ({ filters: { ...(e as ImageElement).filters, ...patch } }));
   return (
     <>
       <PanelHeader title="Edit photo" />
+      <BackgroundRemover el={el} />
       <Label>Filters</Label>
       <div className="grid grid-cols-3 gap-2">
         {FILTER_PRESETS.map((p) => (

@@ -52,6 +52,34 @@ db.exec(`
     height INTEGER,
     created_at INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS versions (
+    id TEXT PRIMARY KEY,
+    design_id TEXT NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    name TEXT,
+    doc TEXT NOT NULL,
+    thumbnail TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS versions_design ON versions(design_id, created_at);
+  CREATE TABLE IF NOT EXISTS comments (
+    id TEXT PRIMARY KEY,
+    design_id TEXT NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    page_id TEXT,
+    element_id TEXT,
+    parent_id TEXT,
+    text TEXT NOT NULL,
+    resolved INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS comments_design ON comments(design_id, created_at);
   CREATE TABLE IF NOT EXISTS brand_kits (
     owner_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     data TEXT NOT NULL
@@ -63,6 +91,7 @@ for (const [table, col, type] of [
   ['uploads', 'kind', "TEXT NOT NULL DEFAULT 'image'"],
   ['uploads', 'duration', 'REAL'],
   ['uploads', 'poster', 'TEXT'],
+  ['designs', 'folder_id', 'TEXT'],
 ]) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
@@ -150,7 +179,7 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 // ---------- Designs ----------
-const summaryCols = 'id, title, thumbnail, starred, trashed_at, share_token, share_mode, created_at, updated_at';
+const summaryCols = 'id, title, thumbnail, starred, trashed_at, share_token, share_mode, folder_id, created_at, updated_at';
 
 function shapeDesign(row, includeDoc) {
   if (!row) return row;
@@ -162,6 +191,7 @@ function shapeDesign(row, includeDoc) {
     trashedAt: row.trashed_at,
     shareToken: row.share_token,
     shareMode: row.share_mode,
+    folderId: row.folder_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -176,6 +206,10 @@ app.get('/api/designs', auth, (req, res) => {
   if (view === 'trash') where = 'owner_id = ? AND trashed_at IS NOT NULL';
   const q = String(req.query.q || '').trim();
   const params = [req.user.id];
+  if (req.query.folder) {
+    where += ' AND folder_id = ?';
+    params.push(String(req.query.folder));
+  }
   if (q) {
     where += ' AND title LIKE ?';
     params.push(`%${q}%`);
@@ -213,7 +247,12 @@ app.patch('/api/designs/:id', auth, (req, res) => {
   const sets = [];
   const params = [];
   if (b.title !== undefined) { sets.push('title = ?'); params.push(String(b.title).slice(0, 200)); }
-  if (b.doc !== undefined) { sets.push('doc = ?'); params.push(JSON.stringify(b.doc)); }
+  if (b.doc !== undefined) {
+    sets.push('doc = ?');
+    params.push(JSON.stringify(b.doc));
+    snapshot(row, false);
+  }
+  if (b.folderId !== undefined) { sets.push('folder_id = ?'); params.push(b.folderId || null); }
   if (b.thumbnail !== undefined) { sets.push('thumbnail = ?'); params.push(b.thumbnail); }
   if (b.starred !== undefined) { sets.push('starred = ?'); params.push(b.starred ? 1 : 0); }
   if (b.trashed !== undefined) { sets.push('trashed_at = ?'); params.push(b.trashed ? now() : null); }
@@ -222,6 +261,133 @@ app.patch('/api/designs/:id', auth, (req, res) => {
   params.push(now(), row.id);
   db.prepare(`UPDATE designs SET ${sets.join(', ')} WHERE id = ?`).run(...params);
   res.json(shapeDesign(db.prepare(`SELECT ${summaryCols} FROM designs WHERE id = ?`).get(row.id), false));
+});
+
+// ---------- Version history ----------
+// Before a save overwrites the doc, keep the previous one if the last snapshot is older
+// than ten minutes. Named versions are kept forever; automatic ones are capped.
+const VERSION_GAP_MS = 10 * 60 * 1000;
+function snapshot(row, force, name = null) {
+  const last = db.prepare('SELECT created_at FROM versions WHERE design_id = ? ORDER BY created_at DESC LIMIT 1').get(row.id);
+  if (!force && last && now() - last.created_at < VERSION_GAP_MS) return null;
+  if (!force && row.created_at === row.updated_at && !last) return null; // brand-new design, nothing to keep yet
+  const vid = id();
+  db.prepare('INSERT INTO versions (id, design_id, title, name, doc, thumbnail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+    vid, row.id, row.title, name, row.doc, row.thumbnail, now(),
+  );
+  db.prepare(`DELETE FROM versions WHERE design_id = ? AND name IS NULL AND id NOT IN
+    (SELECT id FROM versions WHERE design_id = ? AND name IS NULL ORDER BY created_at DESC LIMIT 60)`).run(row.id, row.id);
+  return vid;
+}
+
+app.get('/api/designs/:id/versions', auth, (req, res) => {
+  const row = ownDesign(req, res);
+  if (!row) return;
+  const rows = db.prepare('SELECT id, title, name, thumbnail, created_at FROM versions WHERE design_id = ? ORDER BY created_at DESC').all(row.id);
+  res.json(rows.map((r) => ({ id: r.id, title: r.title, name: r.name, thumbnail: r.thumbnail, createdAt: r.created_at })));
+});
+
+app.get('/api/designs/:id/versions/:vid', auth, (req, res) => {
+  const row = ownDesign(req, res);
+  if (!row) return;
+  const v = db.prepare('SELECT * FROM versions WHERE id = ? AND design_id = ?').get(req.params.vid, row.id);
+  if (!v) return res.status(404).json({ error: 'Version not found' });
+  res.json({ id: v.id, title: v.title, name: v.name, createdAt: v.created_at, doc: JSON.parse(v.doc) });
+});
+
+// Save the current state as a named version.
+app.post('/api/designs/:id/versions', auth, (req, res) => {
+  const row = ownDesign(req, res);
+  if (!row) return;
+  const vid = snapshot(row, true, String(req.body?.name || 'Saved version').slice(0, 80));
+  res.json({ id: vid });
+});
+
+// Restoring keeps the current state as a version first, so it can be undone.
+app.post('/api/designs/:id/versions/:vid/restore', auth, (req, res) => {
+  const row = ownDesign(req, res);
+  if (!row) return;
+  const v = db.prepare('SELECT * FROM versions WHERE id = ? AND design_id = ?').get(req.params.vid, row.id);
+  if (!v) return res.status(404).json({ error: 'Version not found' });
+  snapshot(row, true, 'Before restoring');
+  db.prepare('UPDATE designs SET doc = ?, title = ?, thumbnail = ?, updated_at = ? WHERE id = ?').run(v.doc, v.title, v.thumbnail, now(), row.id);
+  res.json(shapeDesign(db.prepare('SELECT * FROM designs WHERE id = ?').get(row.id), true));
+});
+
+// ---------- Comments ----------
+const shapeComment = (r) => ({
+  id: r.id, pageId: r.page_id, elementId: r.element_id, parentId: r.parent_id, text: r.text,
+  resolved: !!r.resolved, createdAt: r.created_at, author: { id: r.user_id, name: r.author_name },
+});
+const commentQuery = 'SELECT c.*, u.name AS author_name FROM comments c JOIN users u ON u.id = c.user_id';
+
+app.get('/api/designs/:id/comments', auth, (req, res) => {
+  const row = ownDesign(req, res);
+  if (!row) return;
+  res.json(db.prepare(`${commentQuery} WHERE c.design_id = ? ORDER BY c.created_at`).all(row.id).map(shapeComment));
+});
+
+app.post('/api/designs/:id/comments', auth, (req, res) => {
+  const row = ownDesign(req, res);
+  if (!row) return;
+  const { text, pageId, elementId, parentId } = req.body || {};
+  if (!text || !String(text).trim()) return res.status(400).json({ error: 'Write a comment first' });
+  const cid = id();
+  db.prepare('INSERT INTO comments (id, design_id, user_id, page_id, element_id, parent_id, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    cid, row.id, req.user.id, pageId || null, elementId || null, parentId || null, String(text).slice(0, 4000), now(),
+  );
+  res.json(shapeComment(db.prepare(`${commentQuery} WHERE c.id = ?`).get(cid)));
+});
+
+function ownComment(req, res) {
+  const c = db.prepare('SELECT c.* FROM comments c JOIN designs d ON d.id = c.design_id WHERE c.id = ? AND d.owner_id = ?').get(req.params.cid, req.user.id);
+  if (!c) res.status(404).json({ error: 'Comment not found' });
+  return c;
+}
+
+app.patch('/api/comments/:cid', auth, (req, res) => {
+  const c = ownComment(req, res);
+  if (!c) return;
+  if (req.body?.resolved !== undefined) db.prepare('UPDATE comments SET resolved = ? WHERE id = ? OR parent_id = ?').run(req.body.resolved ? 1 : 0, c.id, c.id);
+  if (req.body?.text !== undefined) db.prepare('UPDATE comments SET text = ? WHERE id = ?').run(String(req.body.text).slice(0, 4000), c.id);
+  res.json(shapeComment(db.prepare(`${commentQuery} WHERE c.id = ?`).get(c.id)));
+});
+
+app.delete('/api/comments/:cid', auth, (req, res) => {
+  const c = ownComment(req, res);
+  if (!c) return;
+  db.prepare('DELETE FROM comments WHERE id = ? OR parent_id = ?').run(c.id, c.id);
+  res.json({ ok: true });
+});
+
+// ---------- Folders ----------
+app.get('/api/folders', auth, (req, res) => {
+  const rows = db.prepare(`SELECT f.id, f.name, f.created_at, (SELECT COUNT(*) FROM designs d WHERE d.folder_id = f.id AND d.trashed_at IS NULL) AS count
+    FROM folders f WHERE f.owner_id = ? ORDER BY f.name COLLATE NOCASE`).all(req.user.id);
+  res.json(rows.map((r) => ({ id: r.id, name: r.name, count: r.count, createdAt: r.created_at })));
+});
+
+app.post('/api/folders', auth, (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 80);
+  if (!name) return res.status(400).json({ error: 'Name the folder' });
+  const fid = id();
+  db.prepare('INSERT INTO folders (id, owner_id, name, created_at) VALUES (?, ?, ?, ?)').run(fid, req.user.id, name, now());
+  res.json({ id: fid, name, count: 0, createdAt: now() });
+});
+
+app.patch('/api/folders/:fid', auth, (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 80);
+  const r = db.prepare('UPDATE folders SET name = ? WHERE id = ? AND owner_id = ?').run(name, req.params.fid, req.user.id);
+  if (!r.changes || !name) return res.status(404).json({ error: 'Folder not found' });
+  res.json({ ok: true });
+});
+
+// Deleting a folder keeps its designs; they move back to "All designs".
+app.delete('/api/folders/:fid', auth, (req, res) => {
+  const r = db.prepare('DELETE FROM folders WHERE id = ? AND owner_id = ?').run(req.params.fid, req.user.id);
+  if (!r.changes) return res.status(404).json({ error: 'Folder not found' });
+  db.prepare('UPDATE designs SET folder_id = NULL WHERE folder_id = ? AND owner_id = ?').run(req.params.fid, req.user.id);
+  res.json({ ok: true });
 });
 
 app.post('/api/designs/:id/duplicate', auth, (req, res) => {

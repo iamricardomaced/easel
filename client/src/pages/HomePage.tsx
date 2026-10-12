@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, MoreHorizontal, Plus, Search, Star, Trash2 } from 'lucide-react';
+import { Folder as FolderIcon, FolderPlus, Home, MoreHorizontal, Plus, Search, Star, Trash2 } from 'lucide-react';
 import { api } from '../api';
-import type { DesignSummary } from '../types';
+import type { DesignSummary, Folder } from '../types';
 import { useAuth } from '../store/auth';
 import { SIZE_PRESETS } from '../lib/presets';
 import { TEMPLATES, type Template } from '../lib/templates';
@@ -22,10 +22,31 @@ export function HomePage() {
   const [q, setQ] = useState('');
   const [designs, setDesigns] = useState<DesignSummary[] | null>(null);
   const [custom, setCustom] = useState(false);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folder, setFolder] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
 
+  const refreshFolders = useCallback(() => api.listFolders().then(setFolders).catch(() => {}), []);
   const refresh = useCallback(() => {
-    api.listDesigns(view, q).then(setDesigns).catch((e) => toast(e.message, 'error'));
-  }, [view, q]);
+    api.listDesigns(view, q, folder ?? undefined).then(setDesigns).catch((e) => toast(e.message, 'error'));
+    refreshFolders();
+  }, [view, q, folder, refreshFolders]);
+  const current = folders.find((f) => f.id === folder) ?? null;
+  const [naming, setNaming] = useState<string | null>(null);
+  const newFolder = async (name: string) => {
+    setNaming(null);
+    if (!name.trim()) return;
+    const f = await api.createFolder(name.trim());
+    setView('all');
+    setFolder(f.id);
+    refreshFolders();
+  };
+  const moveTo = async (designId: string, folderId: string | null) => {
+    await api.updateDesign(designId, { folderId });
+    toast(folderId ? `Moved to ${folders.find((f) => f.id === folderId)?.name}` : 'Removed from folder');
+    refresh();
+  };
 
   useEffect(() => {
     document.title = 'Home – Easel';
@@ -45,8 +66,11 @@ export function HomePage() {
 
   const navBtn = (v: View, label: string, icon: React.ReactNode) => (
     <button
-      onClick={() => setView(v)}
-      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm ${view === v ? 'bg-brand/10 font-semibold text-brand' : 'text-gray-700 hover:bg-gray-100'}`}
+      onClick={() => {
+        setView(v);
+        setFolder(null);
+      }}
+      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm ${view === v && !folder ? 'bg-brand/10 font-semibold text-brand' : 'text-gray-700 hover:bg-gray-100'}`}
     >
       {icon}
       {label}
@@ -66,6 +90,55 @@ export function HomePage() {
           {navBtn('all', 'Home', <Home size={18} />)}
           {navBtn('starred', 'Starred', <Star size={18} />)}
           {navBtn('trash', 'Trash', <Trash2 size={18} />)}
+        </nav>
+        <div className="mb-1 mt-6 flex items-center justify-between px-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          Folders
+          <button className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-ink" title="New folder" onClick={() => setNaming('')} data-testid="new-folder">
+            <FolderPlus size={16} />
+          </button>
+        </div>
+        <nav className="space-y-0.5 overflow-y-auto">
+          {naming !== null && (
+            <input
+              autoFocus
+              className="w-full rounded-lg border border-brand px-3 py-1.5 text-sm outline-none"
+              placeholder="Folder name"
+              value={naming}
+              onChange={(e) => setNaming(e.target.value)}
+              onBlur={() => newFolder(naming)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') newFolder(naming);
+                if (e.key === 'Escape') setNaming(null);
+              }}
+              data-testid="folder-name"
+            />
+          )}
+          {folders.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => {
+                setView('all');
+                setFolder(f.id);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDropTarget(f.id);
+              }}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDropTarget(null);
+                const id = e.dataTransfer.getData('text/design-id');
+                if (id) moveTo(id, f.id);
+              }}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm ${folder === f.id ? 'bg-brand/10 font-semibold text-brand' : 'text-gray-700 hover:bg-gray-100'} ${dropTarget === f.id ? 'ring-2 ring-brand' : ''}`}
+            >
+              <FolderIcon size={16} />
+              <span className="flex-1 truncate text-left">{f.name}</span>
+              <span className="text-xs text-gray-400">{f.count}</span>
+            </button>
+          ))}
+          {!folders.length && <p className="px-3 text-xs text-gray-400">Group designs into folders. Drag a design onto a folder to move it.</p>}
         </nav>
         <div className="flex-1" />
         <Popover
@@ -88,7 +161,7 @@ export function HomePage() {
       </aside>
 
       <main className="min-w-0 flex-1">
-        {view === 'all' && !q && (
+        {view === 'all' && !q && !folder && (
           <section className="border-b bg-paper px-10 pb-10 pt-10 text-ink">
             <h1 className="mb-1 text-3xl font-bold tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Start something new</h1>
             <p className="mb-6 text-sm text-gray-600">Pick a format, start from a template, or set your own size.</p>
@@ -116,14 +189,14 @@ export function HomePage() {
         )}
 
         <div className="px-10 py-8">
-          {(view !== 'all' || q) && (
+          {(view !== 'all' || q || folder) && (
             <div className="mb-6 flex items-center gap-2 rounded-full border px-4 py-2.5 text-gray-700">
               <Search size={18} className="text-gray-400" />
               <input className="flex-1 bg-transparent text-sm outline-none" placeholder="Search your designs" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
           )}
 
-          {view === 'all' && !q && (
+          {view === 'all' && !q && !folder && (
             <section className="mb-10">
               <h2 className="mb-4 text-lg font-semibold">Start from a template</h2>
               <div className="flex gap-4 overflow-x-auto pb-2">
@@ -146,7 +219,44 @@ export function HomePage() {
             </section>
           )}
 
-          <h2 className="mb-4 text-lg font-semibold">{view === 'trash' ? 'Trash' : view === 'starred' ? 'Starred' : q ? `Results for “${q}”` : 'Recent designs'}</h2>
+          <div className="mb-4 flex items-center gap-3">
+            {current && renamingFolder !== null ? (
+              <input
+                autoFocus
+                className="rounded border px-2 py-1 text-lg font-semibold"
+                value={renamingFolder}
+                onChange={(e) => setRenamingFolder(e.target.value)}
+                onBlur={async () => {
+                  if (renamingFolder.trim()) await api.renameFolder(current.id, renamingFolder.trim());
+                  setRenamingFolder(null);
+                  refreshFolders();
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+              />
+            ) : (
+            <h2 className="text-lg font-semibold">{current ? current.name : view === 'trash' ? 'Trash' : view === 'starred' ? 'Starred' : q ? `Results for “${q}”` : 'Recent designs'}</h2>
+            )}
+            {current && renamingFolder === null && (
+              <>
+                <button
+                  className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                  onClick={() => setRenamingFolder(current.name)}
+                >
+                  Rename
+                </button>
+                <button
+                  className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                  onClick={async () => {
+                    await api.deleteFolder(current.id);
+                    setFolder(null);
+                    toast('Folder deleted. Its designs are still in Home.');
+                  }}
+                >
+                  Delete folder
+                </button>
+              </>
+            )}
+          </div>
           {view === 'trash' && <p className="-mt-2 mb-4 text-sm text-gray-500">Restore designs or delete them for good.</p>}
           {designs === null ? (
             <p className="text-sm text-gray-400">Loading…</p>
@@ -155,7 +265,7 @@ export function HomePage() {
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-6">
               {designs.map((d) => (
-                <DesignCard key={d.id} d={d} trash={view === 'trash'} onChange={refresh} />
+                <DesignCard key={d.id} d={d} trash={view === 'trash'} onChange={refresh} folders={folders} onMove={moveTo} />
               ))}
             </div>
           )}
@@ -175,7 +285,19 @@ export function HomePage() {
   );
 }
 
-function DesignCard({ d, trash, onChange }: { d: DesignSummary; trash: boolean; onChange: () => void }) {
+function DesignCard({
+  d,
+  trash,
+  onChange,
+  folders,
+  onMove,
+}: {
+  d: DesignSummary;
+  trash: boolean;
+  onChange: () => void;
+  folders: Folder[];
+  onMove: (id: string, folder: string | null) => void;
+}) {
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(d.title);
@@ -190,7 +312,7 @@ function DesignCard({ d, trash, onChange }: { d: DesignSummary; trash: boolean; 
     </button>
   );
   return (
-    <div className="group">
+    <div className="group" draggable={!trash} onDragStart={(e) => e.dataTransfer.setData('text/design-id', d.id)}>
       <div
         className="relative flex aspect-[4/3] cursor-pointer items-center justify-center overflow-hidden rounded-xl bg-gray-100 transition group-hover:shadow-md"
         onClick={() => !trash && navigate(`/design/${d.id}`)}
@@ -218,6 +340,9 @@ function DesignCard({ d, trash, onChange }: { d: DesignSummary; trash: boolean; 
                   {item('Rename', () => { close(); setRenaming(true); })}
                   {item(d.starred ? 'Unstar' : 'Star', () => { close(); act(() => api.updateDesign(d.id, { starred: !d.starred })); })}
                   {item('Make a copy', () => { close(); act(() => api.duplicateDesign(d.id), 'Copy created'); })}
+                  {folders.length > 0 && <div className="mt-1 border-t px-3 pb-1 pt-2 text-[11px] font-semibold uppercase text-gray-400">Move to folder</div>}
+                  {folders.filter((f) => f.id !== d.folderId).map((f) => item(f.name, () => { close(); onMove(d.id, f.id); }))}
+                  {d.folderId && item('Remove from folder', () => { close(); onMove(d.id, null); })}
                   {item('Move to trash', () => { close(); act(() => api.updateDesign(d.id, { trashed: true }), 'Moved to trash'); }, true)}
                 </>
               )

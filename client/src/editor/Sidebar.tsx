@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
-import { BarChart3, Brush, Cloud, Film, Image as ImageIcon, Layers, LayoutTemplate, Music, Palette, Pause, Play, Shapes, Type, Video } from 'lucide-react';
+import { BarChart3, Blocks, Brush, Sparkles, Cloud, Film, Image as ImageIcon, Layers, LayoutTemplate, Music, Palette, Pause, Play, Shapes, Type, Video } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useEditor } from '../store/editor';
 import type { DesignElement, UploadItem } from '../types';
@@ -11,13 +11,17 @@ import { StaticPage } from './ElementView';
 import { uploadFile, uploadListeners } from '../lib/upload';
 import { placeUpload } from '../lib/place';
 import { MUSIC, MUSIC_SECONDS, resolveMedia } from '../lib/media';
-import { makeAudioTrack, makeVideo } from '../lib/factory';
+import { GRID_LAYOUTS, makeAudioTrack, makeGrid, makeVideo } from '../lib/factory';
 import { useBrandKit } from '../store/brand';
 import { ColorPicker } from '../components/ui';
 import { DEFAULT_COLORS } from '../lib/presets';
 import { FONTS } from '../lib/fonts';
 import { useUi, CONTEXT_PANELS, type PanelId } from '../store/ui';
 import { ContextPanel, LayersList } from './ContextPanels';
+import { CommentsPanel } from './CollabPanels';
+import { AppsPanel, StylesPanel } from './StylesApps';
+
+const EMOJI = [...'😀😂😍🥰😎🤩🥳😇🤔😴😭😡👍👏🙌🙏💪👋✌️👀❤️🧡💛💚💙💜🖤🔥✨⭐🌟💯🎉🎊🎁🎈🎂🍕☕🍦🌈☀️🌙⚡❄️🌸🌻🍀🌴🐶🐱🦄🦋🚀✈️🏆🎯💡📌📣💬✅❌⚠️'.matchAll(/\p{Extended_Pictographic}\uFE0F?/gu)].map((m) => m[0]);
 
 const IconSearch = lazy(() => import('./IconSearch'));
 
@@ -32,6 +36,8 @@ const TABS: { id: PanelId; label: string; icon: ReactNode }[] = [
   { id: 'videos', label: 'Videos', icon: <Film size={20} /> },
   { id: 'audio', label: 'Audio', icon: <Music size={20} /> },
   { id: 'charts', label: 'Charts', icon: <BarChart3 size={20} /> },
+  { id: 'styles', label: 'Styles', icon: <Sparkles size={20} /> },
+  { id: 'apps', label: 'Apps', icon: <Blocks size={20} /> },
   { id: 'draw', label: 'Draw', icon: <Brush size={20} /> },
   { id: 'layers', label: 'Layers', icon: <Layers size={20} /> },
 ];
@@ -74,6 +80,9 @@ export function Sidebar() {
             {panel === 'photos' && <PhotosPanel />}
             {panel === 'videos' && <VideosPanel />}
             {panel === 'audio' && <AudioPanel />}
+            {panel === 'comments' && <CommentsPanel />}
+            {panel === 'styles' && <StylesPanel />}
+            {panel === 'apps' && <AppsPanel />}
             {panel === 'charts' && <ChartsPanel />}
             {panel === 'draw' && <DrawPanel />}
             {panel === 'layers' && (
@@ -207,6 +216,36 @@ function ElementsPanel() {
             {...addable(() => makeImage(`https://picsum.photos/seed/frame-${fr}/600/600`, 300, 300, { frame: fr }))}
           >
             {fr === 'none' ? 'Square' : fr}
+          </button>
+        ))}
+      </div>
+      <H>Grids</H>
+      <p className="mb-2 text-xs text-gray-500">Fills the page. Drop photos onto each cell.</p>
+      <div className="grid grid-cols-4 gap-2">
+        {GRID_LAYOUTS.map((g) => (
+          <button
+            key={g.id}
+            title={g.label}
+            className="relative h-14 rounded-md border bg-white p-1 hover:border-brand"
+            onClick={() => {
+              const s = useEditor.getState();
+              s.addElements(makeGrid(g.id, s.doc.width, s.doc.height, Math.round(Math.min(s.doc.width, s.doc.height) / 90)));
+            }}
+            data-testid={`grid-${g.id}`}
+          >
+            <span className="relative block h-full w-full">
+              {g.cells.map(([x, y, w, h], i) => (
+                <span key={i} className="absolute rounded-[2px] bg-gray-300" style={{ left: `calc(${x * 100}% + 1px)`, top: `calc(${y * 100}% + 1px)`, width: `calc(${w * 100}% - 2px)`, height: `calc(${h * 100}% - 2px)` }} />
+              ))}
+            </span>
+          </button>
+        ))}
+      </div>
+      <H>Emoji</H>
+      <div className="grid grid-cols-8 gap-1">
+        {EMOJI.map((e) => (
+          <button key={e} className="rounded p-1 text-xl hover:bg-gray-100" {...addable(() => makeText({ text: e, fontSize: 160, w: 240, fontFamily: 'Inter' }))}>
+            {e}
           </button>
         ))}
       </div>

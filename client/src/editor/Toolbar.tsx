@@ -1,8 +1,8 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, CaseUpper, ChevronDown,
   Copy, FlipHorizontal2, FlipVertical2, Group, Italic, List, ListOrdered, Lock, LockOpen, Minus, Plus,
-  Pause, Play, Strikethrough, Trash2, Underline, Ungroup, Volume2, VolumeX, ArrowRightLeft, Clock,
+  Link2, MessageSquarePlus, Paintbrush, Pause, Play, Strikethrough, Trash2, Underline, Ungroup, Volume2, VolumeX, ArrowRightLeft, Clock,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useEditor } from '../store/editor';
@@ -15,6 +15,7 @@ import { ColorButton, ColorPicker, Popover, Slider, ToolButton } from '../compon
 import { FONTS } from '../lib/fonts';
 import { fillCss } from './ElementView';
 import { SHAPE_KINDS } from '../lib/shapes';
+import { commentOn } from './CollabPanels';
 
 const Sep = () => <div className="mx-1 h-6 w-px bg-gray-200" />;
 
@@ -479,6 +480,61 @@ function VideoTools({ el }: { el: VideoElement }) {
   );
 }
 
+function CopyStyleButton({ el }: { el: DesignElement }) {
+  const active = useUi((s) => s.styleSource?.id === el.id);
+  useEffect(() => {
+    if (!active) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && useUi.getState().setStyleSource(null);
+    window.addEventListener('keydown', esc, true);
+    return () => window.removeEventListener('keydown', esc, true);
+  }, [active]);
+  return (
+    <ToolButton
+      title={active ? 'Click another element to paste this style (Esc to cancel)' : 'Copy style'}
+      active={active}
+      onClick={() => useUi.getState().setStyleSource(active ? null : structuredClone(el))}
+    >
+      <Paintbrush size={16} />
+    </ToolButton>
+  );
+}
+
+function LinkEditor({ el, close }: { el: DesignElement; close: () => void }) {
+  const [url, setUrl] = useState(el.link ?? '');
+  const save = () => {
+    const v = url.trim();
+    set({ link: v ? (/^(https?:|mailto:|tel:|#)/i.test(v) ? v : `https://${v}`) : undefined });
+    close();
+  };
+  return (
+    <div className="space-y-2">
+      <input
+        autoFocus
+        className="w-full rounded border px-2 py-1.5 text-sm"
+        placeholder="https://… or page number like #3"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') save();
+        }}
+        data-testid="link-input"
+      />
+      <p className="text-[11px] text-gray-500">Opens when someone clicks the element while presenting or on the view-only link. Use #3 to jump to page 3.</p>
+      <div className="flex justify-end gap-2">
+        {el.link && (
+          <button className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50" onClick={() => { set({ link: undefined }); close(); }}>
+            Remove
+          </button>
+        )}
+        <button className="rounded bg-brand px-3 py-1 text-xs font-semibold text-white" onClick={save}>
+          Apply
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PanelButton({ panel, title, children }: { panel: PanelId; title: string; children: ReactNode }) {
   const active = useUi((s) => s.panel === panel);
   return (
@@ -503,6 +559,13 @@ function CommonTools({ selected }: { selected: DesignElement[] }) {
       )}
       <PanelButton panel="animate" title="Animate (plays in Present mode)">Animate</PanelButton>
       <PanelButton panel="position" title="Position, alignment and layers">Position</PanelButton>
+      <ToolButton title="Comment on this element" onClick={() => commentOn(el.id)}>
+        <MessageSquarePlus size={16} />
+      </ToolButton>
+      <CopyStyleButton el={el} />
+      <Popover title="Link" width={300} align="right" trigger={() => <ToolButton title="Link" active={!!el.link}><Link2 size={16} /></ToolButton>}>
+        {(close) => <LinkEditor el={el} close={close} />}
+      </Popover>
       <Popover title="Transparency" width={240} align="right" trigger={() => <ToolButton title="Transparency">◐</ToolButton>}>
         <Slider label="Opacity" value={Math.round(el.opacity * 100)} min={0} max={100} onStart={start} onChange={(v) => live({ opacity: v / 100 })} />
       </Popover>

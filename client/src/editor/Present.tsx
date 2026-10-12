@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { DesignDoc } from '../types';
 import { Player, usePlaybackClock } from './Player';
+import { openLink } from './ElementView';
 import { locate, pageSeconds, pageStarts, totalSeconds } from '../lib/motion';
 
-export function Present({ doc, start = 0, onClose }: { doc: DesignDoc; start?: number; onClose: () => void }) {
+export function Present({ doc: full, start = 0, onClose }: { doc: DesignDoc; start?: number; onClose: () => void }) {
+  // Hidden pages are skipped, as in Canva.
+  const [doc] = useState(() => {
+    const pages = full.pages.filter((p) => !p.hidden);
+    return { ...full, pages: pages.length ? pages : full.pages };
+  });
+  const first = Math.max(0, doc.pages.indexOf(full.pages[start]));
   const starts = pageStarts(doc);
-  const [time, setTime] = useState(starts[start] ?? 0);
+  const [time, setTime] = useState(starts[first] ?? 0);
   const [playing, setPlaying] = useState(true);
   const [autoplay, setAutoplay] = useState(false);
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -64,7 +71,7 @@ export function Present({ doc, start = 0, onClose }: { doc: DesignDoc; start?: n
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black" onClick={() => go(i + 1)} data-testid="present">
-      <Player doc={doc} time={time} playing={playing} boxW={size.w} boxH={size.h} />
+      <Player doc={doc} time={time} playing={playing} boxW={size.w} boxH={size.h} onLink={(l) => openLink(l, (p) => go(doc.pages.indexOf(full.pages[p]) >= 0 ? doc.pages.indexOf(full.pages[p]) : p))} />
       <div
         className="group fixed bottom-0 left-0 right-0 flex items-center justify-center gap-3 p-4 opacity-0 transition hover:opacity-100"
         onClick={(e) => e.stopPropagation()}
