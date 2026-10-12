@@ -17,7 +17,9 @@ import { makeThumbnail } from '../lib/export';
 import { makeLine, makeShape, makeText } from '../lib/factory';
 import { isMediaFile, uploadFile } from '../lib/upload';
 import { placeUpload } from '../lib/place';
-import type { TextElement } from '../types';
+import type { Role, TextElement } from '../types';
+import { sync, useLive, useLiveSync } from '../lib/live';
+import { ReadOnlyDesign } from '../editor/ReadOnlyDesign';
 
 const SAVE_DELAY = 1000;
 const THUMB_DELAY = 4000;
@@ -28,6 +30,8 @@ export function EditorPage() {
   const [loaded, setLoaded] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [presenting, setPresenting] = useState(false);
+  const [role, setRole] = useState<Role | null>(null);
+  const [ownerName, setOwnerName] = useState('');
   const version = useEditor((s) => s.version);
   const title = useEditor((s) => s.title);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -43,6 +47,9 @@ export function EditorPage() {
       .getDesign(id!)
       .then((d) => {
         useEditor.getState().load(d.id, d.title, d.doc);
+        setRole(d.role);
+        useLive.setState({ role: d.role });
+        setOwnerName(d.ownerName);
         useComments.getState().load(d.id);
         useUi.setState({ playing: false, time: 0, videoPreview: null });
         document.title = `${d.title} – Easel`;
@@ -67,18 +74,22 @@ export function EditorPage() {
 
   // Autosave: document changes debounce to a PATCH; thumbnails regenerate less often.
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || role === 'view' || role === 'comment') return;
     if (firstVersion.current) {
       firstVersion.current = false;
       return;
     }
     setSaveState('unsaved');
+    sync.pending = true;
     const t = setTimeout(async () => {
-      const { designId, doc } = useEditor.getState();
+      const { designId, doc, version: v } = useEditor.getState();
       if (!designId) return;
       setSaveState('saving');
       try {
         await api.updateDesign(designId, { doc });
+        // Collaborators' changes merge against what we last saved.
+        sync.base = structuredClone(doc);
+        if (useEditor.getState().version === v) sync.pending = false;
         setSaveState('saved');
       } catch {
         setSaveState('error');
@@ -115,11 +126,13 @@ export function EditorPage() {
     [id],
   );
 
+  useLiveSync(loaded ? id! : null, loaded && role !== null);
+
   const savedTitle = useRef<string | null>(null);
   useEffect(() => {
     if (!loaded) return;
     document.title = `${title} – Easel`;
-    if (savedTitle.current === null || savedTitle.current === title) {
+    if (savedTitle.current === null || savedTitle.current === title || sync.remoteTitle === title) {
       savedTitle.current = title;
       return;
     }
@@ -139,7 +152,8 @@ export function EditorPage() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [saveState]);
 
-  useShortcuts(fit, () => setPresenting(true));
+  const readOnly = role === 'view' || role === 'comment';
+  useShortcuts(fit, () => setPresenting(true), readOnly);
 
   // Pasting an image from the system clipboard uploads it and adds it to the page.
   useEffect(() => {
@@ -162,6 +176,7 @@ export function EditorPage() {
 
   if (error) return <div className="flex h-screen items-center justify-center text-gray-600">{error}</div>;
   if (!loaded) return <div className="flex h-screen items-center justify-center text-gray-400">Loading design…</div>;
+  if (role === 'view' || role === 'comment') return <ReadOnlyDesign role={role} ownerName={ownerName} />;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-paper">
@@ -183,8 +198,9 @@ export function EditorPage() {
   );
 }
 
-function useShortcuts(fit: () => void, present: () => void) {
+function useShortcuts(fit: () => void, present: () => void, readOnly: boolean) {
   useEffect(() => {
+    if (readOnly) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
@@ -247,5 +263,5 @@ function useShortcuts(fit: () => void, present: () => void) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [fit, present]);
+  }, [fit, present, readOnly]);
 }

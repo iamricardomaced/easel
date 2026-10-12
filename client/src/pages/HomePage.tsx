@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Folder as FolderIcon, FolderPlus, Home, MoreHorizontal, Plus, Search, Star, Trash2 } from 'lucide-react';
+import { Folder as FolderIcon, FolderPlus, Home, Users, MoreHorizontal, Plus, Search, Star, Trash2 } from 'lucide-react';
 import { api } from '../api';
 import type { DesignSummary, Folder } from '../types';
 import { useAuth } from '../store/auth';
@@ -12,7 +12,7 @@ import { Modal, Popover } from '../components/ui';
 import { toast } from '../lib/toast';
 import { Logo } from '../components/Logo';
 
-type View = 'all' | 'starred' | 'trash';
+type View = 'all' | 'starred' | 'trash' | 'shared';
 
 export function HomePage() {
   const user = useAuth((s) => s.user);
@@ -88,6 +88,7 @@ export function HomePage() {
         </button>
         <nav className="space-y-1">
           {navBtn('all', 'Home', <Home size={18} />)}
+          {navBtn('shared', 'Shared with you', <Users size={18} />)}
           {navBtn('starred', 'Starred', <Star size={18} />)}
           {navBtn('trash', 'Trash', <Trash2 size={18} />)}
         </nav>
@@ -234,7 +235,7 @@ export function HomePage() {
                 onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
               />
             ) : (
-            <h2 className="text-lg font-semibold">{current ? current.name : view === 'trash' ? 'Trash' : view === 'starred' ? 'Starred' : q ? `Results for “${q}”` : 'Recent designs'}</h2>
+            <h2 className="text-lg font-semibold">{current ? current.name : view === 'trash' ? 'Trash' : view === 'starred' ? 'Starred' : view === 'shared' ? 'Shared with you' : q ? `Results for “${q}”` : 'Recent designs'}</h2>
             )}
             {current && renamingFolder === null && (
               <>
@@ -265,7 +266,7 @@ export function HomePage() {
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-6">
               {designs.map((d) => (
-                <DesignCard key={d.id} d={d} trash={view === 'trash'} onChange={refresh} folders={folders} onMove={moveTo} />
+                <DesignCard key={d.id} d={d} trash={view === 'trash'} shared={view === 'shared'} onChange={refresh} folders={folders} onMove={moveTo} />
               ))}
             </div>
           )}
@@ -291,9 +292,11 @@ function DesignCard({
   onChange,
   folders,
   onMove,
+  shared,
 }: {
   d: DesignSummary;
   trash: boolean;
+  shared?: boolean;
   onChange: () => void;
   folders: Folder[];
   onMove: (id: string, folder: string | null) => void;
@@ -312,7 +315,7 @@ function DesignCard({
     </button>
   );
   return (
-    <div className="group" draggable={!trash} onDragStart={(e) => e.dataTransfer.setData('text/design-id', d.id)}>
+    <div className="group" draggable={!trash && !shared} onDragStart={(e) => e.dataTransfer.setData('text/design-id', d.id)}>
       <div
         className="relative flex aspect-[4/3] cursor-pointer items-center justify-center overflow-hidden rounded-xl bg-gray-100 transition group-hover:shadow-md"
         onClick={() => !trash && navigate(`/design/${d.id}`)}
@@ -329,7 +332,13 @@ function DesignCard({
             )}
           >
             {(close) =>
-              trash ? (
+              shared ? (
+                <>
+                  {item('Open', () => navigate(`/design/${d.id}`))}
+                  {item('Make a copy', () => { close(); act(() => api.duplicateDesign(d.id), 'Copy added to your designs'); })}
+                  {item('Leave', () => { close(); act(() => api.me().then((u) => api.removeMember(d.id, u.id)), 'Removed from your list'); }, true)}
+                </>
+              ) : trash ? (
                 <>
                   {item('Restore', () => { close(); act(() => api.updateDesign(d.id, { trashed: false }), 'Restored'); })}
                   {item('Delete forever', () => { close(); act(() => api.deleteDesign(d.id), 'Deleted'); }, true)}
@@ -366,7 +375,9 @@ function DesignCard({
       ) : (
         <div className="mt-2 truncate text-sm font-medium">{d.title}</div>
       )}
-      <div className="text-xs text-gray-500">Edited {new Date(d.updatedAt).toLocaleString()}</div>
+      <div className="text-xs text-gray-500">
+        {d.ownerName ? `${d.ownerName} · ${d.role === 'edit' ? 'can edit' : d.role === 'comment' ? 'can comment' : 'can view'} · ` : ''}Edited {new Date(d.updatedAt).toLocaleString()}
+      </div>
     </div>
   );
 }

@@ -244,6 +244,8 @@ export interface DesignSummary {
   shareToken: string | null;
   shareMode: 'view' | 'template' | null;
   folderId: string | null;
+  role?: Role; // set on designs shared with you
+  ownerName?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -298,4 +300,21 @@ export interface Comment {
   resolved: boolean;
   createdAt: number;
   author: { id: string; name: string };
+}
+
+export type Role = 'owner' | 'edit' | 'comment' | 'view';
+
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+}
+
+export interface Collaborator {
+  clientId: string;
+  id: string;
+  name: string;
+  color: string;
+  cursor: { page: number; selected: string[] } | null;
 }

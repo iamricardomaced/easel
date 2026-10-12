@@ -1,7 +1,10 @@
-import type { BrandKit, Comment, Design, DesignDoc, DesignSummary, Folder, UploadItem, User, VersionSummary } from './types';
+import type { BrandKit, Comment, Design, DesignDoc, DesignSummary, Folder, Member, Role, UploadItem, User, VersionSummary } from './types';
+
+// Identifies this browser tab, so the server doesn't echo our own saves back to us.
+export const CLIENT_ID = Math.random().toString(36).slice(2, 12);
 
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { 'X-Client-Id': CLIENT_ID };
   if (init.body && !(init.body instanceof FormData)) headers['Content-Type'] = 'application/json';
   const res = await fetch(url, { credentials: 'include', ...init, headers: { ...headers, ...(init.headers as object) } });
   const data = await res.json().catch(() => ({}));
@@ -18,10 +21,15 @@ export const api = {
     request<User>('/api/auth/signup', json('POST', { email, name, password })),
   logout: () => request<{ ok: true }>('/api/auth/logout', json('POST')),
 
-  listDesigns: (view: 'all' | 'starred' | 'trash', q = '', folder?: string) =>
+  listDesigns: (view: 'all' | 'starred' | 'trash' | 'shared', q = '', folder?: string) =>
     request<DesignSummary[]>(`/api/designs?view=${view}&q=${encodeURIComponent(q)}${folder ? `&folder=${folder}` : ''}`),
   createDesign: (title: string, doc: DesignDoc) => request<Design>('/api/designs', json('POST', { title, doc })),
-  getDesign: (id: string) => request<Design>(`/api/designs/${id}`),
+  getDesign: (id: string) => request<Design & { role: Role; ownerName: string }>(`/api/designs/${id}`),
+  listMembers: (id: string) => request<Member[]>(`/api/designs/${id}/members`),
+  addMember: (id: string, email: string, role: Exclude<Role, 'owner'>) => request<Member>(`/api/designs/${id}/members`, json('POST', { email, role })),
+  removeMember: (id: string, uid: string) => request<{ ok: true }>(`/api/designs/${id}/members/${uid}`, json('DELETE')),
+  sendCursor: (id: string, page: number, selected: string[]) =>
+    request<{ ok: true }>(`/api/designs/${id}/cursor`, json('POST', { client: CLIENT_ID, page, selected })),
   updateDesign: (
     id: string,
     patch: Partial<{ title: string; doc: DesignDoc; thumbnail: string; starred: boolean; trashed: boolean; folderId: string | null }>,

@@ -52,6 +52,13 @@ db.exec(`
     height INTEGER,
     created_at INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS design_members (
+    design_id TEXT NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (design_id, user_id)
+  );
   CREATE TABLE IF NOT EXISTS folders (
     id TEXT PRIMARY KEY,
     owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -201,6 +208,12 @@ function shapeDesign(row, includeDoc) {
 
 app.get('/api/designs', auth, (req, res) => {
   const view = req.query.view || 'all';
+  if (view === 'shared') {
+    const rows = db.prepare(`SELECT d.id, d.title, d.thumbnail, d.starred, d.trashed_at, d.share_token, d.share_mode, d.folder_id, d.created_at, d.updated_at, m.role, u.name AS owner_name
+      FROM design_members m JOIN designs d ON d.id = m.design_id JOIN users u ON u.id = d.owner_id
+      WHERE m.user_id = ? AND d.trashed_at IS NULL ORDER BY d.updated_at DESC`).all(req.user.id);
+    return res.json(rows.map((r) => ({ ...shapeDesign(r, false), starred: false, role: r.role, ownerName: r.owner_name })));
+  }
   let where = 'owner_id = ? AND trashed_at IS NULL';
   if (view === 'starred') where += ' AND starred = 1';
   if (view === 'trash') where = 'owner_id = ? AND trashed_at IS NOT NULL';
@@ -230,20 +243,47 @@ app.post('/api/designs', auth, (req, res) => {
 });
 
 function ownDesign(req, res) {
-  const row = db.prepare('SELECT * FROM designs WHERE id = ? AND owner_id = ?').get(req.params.id, req.user.id);
-  if (!row) res.status(404).json({ error: 'Design not found' });
+  return designAccess(req, res, 'owner');
+}
+
+// ---------- Access ----------
+// The owner can do everything; invited people can view, comment or edit.
+const RANK = { view: 1, comment: 2, edit: 3, owner: 4 };
+
+function roleFor(designRow, userId) {
+  if (!designRow) return null;
+  if (designRow.owner_id === userId) return 'owner';
+  const m = db.prepare('SELECT role FROM design_members WHERE design_id = ? AND user_id = ?').get(designRow.id, userId);
+  return m ? m.role : null;
+}
+
+function designAccess(req, res, need, id = req.params.id) {
+  const row = db.prepare('SELECT * FROM designs WHERE id = ?').get(id);
+  const role = roleFor(row, req.user.id);
+  if (!row || !role || (row.trashed_at && role !== 'owner')) {
+    res.status(404).json({ error: 'Design not found' });
+    return null;
+  }
+  if (RANK[role] < RANK[need]) {
+    res.status(403).json({ error: need === 'owner' ? 'Only the owner can do that' : `You need ${need} access to do that` });
+    return null;
+  }
+  row.role = role;
   return row;
 }
 
 app.get('/api/designs/:id', auth, (req, res) => {
-  const row = ownDesign(req, res);
-  if (row) res.json(shapeDesign(row, true));
+  const row = designAccess(req, res, 'view');
+  if (!row) return;
+  const owner = db.prepare('SELECT name FROM users WHERE id = ?').get(row.owner_id);
+  res.json({ ...shapeDesign(row, true), role: row.role, ownerName: owner?.name ?? '' });
 });
 
 app.patch('/api/designs/:id', auth, (req, res) => {
-  const row = ownDesign(req, res);
-  if (!row) return;
   const b = req.body || {};
+  const ownerOnly = ['starred', 'trashed', 'folderId'].some((k) => b[k] !== undefined);
+  const row = designAccess(req, res, ownerOnly ? 'owner' : 'edit');
+  if (!row) return;
   const sets = [];
   const params = [];
   if (b.title !== undefined) { sets.push('title = ?'); params.push(String(b.title).slice(0, 200)); }
@@ -260,7 +300,12 @@ app.patch('/api/designs/:id', auth, (req, res) => {
   sets.push('updated_at = ?');
   params.push(now(), row.id);
   db.prepare(`UPDATE designs SET ${sets.join(', ')} WHERE id = ?`).run(...params);
-  res.json(shapeDesign(db.prepare(`SELECT ${summaryCols} FROM designs WHERE id = ?`).get(row.id), false));
+  const updated = db.prepare(`SELECT ${summaryCols} FROM designs WHERE id = ?`).get(row.id);
+  if (b.doc !== undefined || b.title !== undefined) {
+    const full = db.prepare('SELECT doc, title, updated_at FROM designs WHERE id = ?').get(row.id);
+    broadcast(row.id, { type: 'doc', doc: JSON.parse(full.doc), title: full.title, at: full.updated_at, by: req.user.name }, req.get('x-client-id'));
+  }
+  res.json(shapeDesign(updated, false));
 });
 
 // ---------- Version history ----------
@@ -281,14 +326,14 @@ function snapshot(row, force, name = null) {
 }
 
 app.get('/api/designs/:id/versions', auth, (req, res) => {
-  const row = ownDesign(req, res);
+  const row = designAccess(req, res, 'edit');
   if (!row) return;
   const rows = db.prepare('SELECT id, title, name, thumbnail, created_at FROM versions WHERE design_id = ? ORDER BY created_at DESC').all(row.id);
   res.json(rows.map((r) => ({ id: r.id, title: r.title, name: r.name, thumbnail: r.thumbnail, createdAt: r.created_at })));
 });
 
 app.get('/api/designs/:id/versions/:vid', auth, (req, res) => {
-  const row = ownDesign(req, res);
+  const row = designAccess(req, res, 'edit');
   if (!row) return;
   const v = db.prepare('SELECT * FROM versions WHERE id = ? AND design_id = ?').get(req.params.vid, row.id);
   if (!v) return res.status(404).json({ error: 'Version not found' });
@@ -297,7 +342,7 @@ app.get('/api/designs/:id/versions/:vid', auth, (req, res) => {
 
 // Save the current state as a named version.
 app.post('/api/designs/:id/versions', auth, (req, res) => {
-  const row = ownDesign(req, res);
+  const row = designAccess(req, res, 'edit');
   if (!row) return;
   const vid = snapshot(row, true, String(req.body?.name || 'Saved version').slice(0, 80));
   res.json({ id: vid });
@@ -305,12 +350,13 @@ app.post('/api/designs/:id/versions', auth, (req, res) => {
 
 // Restoring keeps the current state as a version first, so it can be undone.
 app.post('/api/designs/:id/versions/:vid/restore', auth, (req, res) => {
-  const row = ownDesign(req, res);
+  const row = designAccess(req, res, 'edit');
   if (!row) return;
   const v = db.prepare('SELECT * FROM versions WHERE id = ? AND design_id = ?').get(req.params.vid, row.id);
   if (!v) return res.status(404).json({ error: 'Version not found' });
   snapshot(row, true, 'Before restoring');
   db.prepare('UPDATE designs SET doc = ?, title = ?, thumbnail = ?, updated_at = ? WHERE id = ?').run(v.doc, v.title, v.thumbnail, now(), row.id);
+  broadcast(row.id, { type: 'doc', doc: JSON.parse(v.doc), title: v.title, at: now(), by: req.user.name }, req.get('x-client-id'));
   res.json(shapeDesign(db.prepare('SELECT * FROM designs WHERE id = ?').get(row.id), true));
 });
 
@@ -322,13 +368,13 @@ const shapeComment = (r) => ({
 const commentQuery = 'SELECT c.*, u.name AS author_name FROM comments c JOIN users u ON u.id = c.user_id';
 
 app.get('/api/designs/:id/comments', auth, (req, res) => {
-  const row = ownDesign(req, res);
+  const row = designAccess(req, res, 'view');
   if (!row) return;
   res.json(db.prepare(`${commentQuery} WHERE c.design_id = ? ORDER BY c.created_at`).all(row.id).map(shapeComment));
 });
 
 app.post('/api/designs/:id/comments', auth, (req, res) => {
-  const row = ownDesign(req, res);
+  const row = designAccess(req, res, 'comment');
   if (!row) return;
   const { text, pageId, elementId, parentId } = req.body || {};
   if (!text || !String(text).trim()) return res.status(400).json({ error: 'Write a comment first' });
@@ -336,12 +382,21 @@ app.post('/api/designs/:id/comments', auth, (req, res) => {
   db.prepare('INSERT INTO comments (id, design_id, user_id, page_id, element_id, parent_id, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
     cid, row.id, req.user.id, pageId || null, elementId || null, parentId || null, String(text).slice(0, 4000), now(),
   );
+  broadcast(row.id, { type: 'comments' });
   res.json(shapeComment(db.prepare(`${commentQuery} WHERE c.id = ?`).get(cid)));
 });
 
+// The author, the owner and editors can change or remove a comment.
 function ownComment(req, res) {
-  const c = db.prepare('SELECT c.* FROM comments c JOIN designs d ON d.id = c.design_id WHERE c.id = ? AND d.owner_id = ?').get(req.params.cid, req.user.id);
-  if (!c) res.status(404).json({ error: 'Comment not found' });
+  const c = db.prepare('SELECT * FROM comments WHERE id = ?').get(req.params.cid);
+  const d = c && db.prepare('SELECT * FROM designs WHERE id = ?').get(c.design_id);
+  const role = roleFor(d, req.user.id);
+  const allowed = c && role && (c.user_id === req.user.id || RANK[role] >= RANK.edit || (req.body?.resolved !== undefined && RANK[role] >= RANK.comment));
+  if (!allowed) {
+    res.status(404).json({ error: 'Comment not found' });
+    return null;
+  }
+  setTimeout(() => broadcast(c.design_id, { type: 'comments' }));
   return c;
 }
 
@@ -390,8 +445,87 @@ app.delete('/api/folders/:fid', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Collaborators ----------
+app.get('/api/designs/:id/members', auth, (req, res) => {
+  const row = designAccess(req, res, 'view');
+  if (!row) return;
+  const owner = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(row.owner_id);
+  const members = db.prepare('SELECT u.id, u.name, u.email, m.role FROM design_members m JOIN users u ON u.id = m.user_id WHERE m.design_id = ? ORDER BY m.created_at').all(row.id);
+  res.json([{ ...owner, role: 'owner' }, ...members]);
+});
+
+app.post('/api/designs/:id/members', auth, (req, res) => {
+  const row = designAccess(req, res, 'owner');
+  if (!row) return;
+  const role = req.body?.role;
+  if (!['view', 'comment', 'edit'].includes(role)) return res.status(400).json({ error: 'Pick a role' });
+  const user = db.prepare('SELECT id, name, email FROM users WHERE email = ?').get(String(req.body?.email || '').trim().toLowerCase());
+  if (!user) return res.status(404).json({ error: 'There is no Easel account with that email yet' });
+  if (user.id === row.owner_id) return res.status(400).json({ error: 'That is you' });
+  db.prepare('INSERT INTO design_members (design_id, user_id, role, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(design_id, user_id) DO UPDATE SET role = excluded.role').run(row.id, user.id, role, now());
+  res.json({ ...user, role });
+});
+
+app.delete('/api/designs/:id/members/:uid', auth, (req, res) => {
+  // Owners remove anyone; members can remove themselves (leave).
+  const row = designAccess(req, res, req.params.uid === req.user.id ? 'view' : 'owner');
+  if (!row) return;
+  db.prepare('DELETE FROM design_members WHERE design_id = ? AND user_id = ?').run(row.id, req.params.uid);
+  res.json({ ok: true });
+});
+
+// ---------- Live updates (Server-Sent Events) ----------
+// Everyone with a design open gets its saved changes, who else is there and what they
+// have selected. Clients send an X-Client-Id so their own saves are not echoed back.
+const rooms = new Map(); // designId -> Map<clientId, { res, user, color, cursor }>
+const COLORS = ['#e8590c', '#1c7ed6', '#2f9e44', '#ae3ec9', '#f08c00', '#0c8599', '#d6336c', '#5f3dc4'];
+
+function presence(designId) {
+  const room = rooms.get(designId);
+  if (!room) return [];
+  return [...room.entries()].map(([clientId, c]) => ({ clientId, id: c.user.id, name: c.user.name, color: c.color, cursor: c.cursor }));
+}
+
+function broadcast(designId, msg, exceptClient) {
+  const room = rooms.get(designId);
+  if (!room) return;
+  const data = `data: ${JSON.stringify(msg)}\n\n`;
+  for (const [cid, c] of room) if (cid !== exceptClient) c.res.write(data);
+}
+
+app.get('/api/designs/:id/events', auth, (req, res) => {
+  const row = designAccess(req, res, 'view');
+  if (!row) return;
+  const clientId = String(req.query.client || id());
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.write(': connected\n\n');
+  if (!rooms.has(row.id)) rooms.set(row.id, new Map());
+  const room = rooms.get(row.id);
+  const used = new Set([...room.values()].map((c) => c.color));
+  room.set(clientId, { res, user: req.user, color: COLORS.find((c) => !used.has(c)) ?? COLORS[room.size % COLORS.length], cursor: null });
+  broadcast(row.id, { type: 'presence', people: presence(row.id) });
+  const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+  req.on('close', () => {
+    clearInterval(ping);
+    room.delete(clientId);
+    if (!room.size) rooms.delete(row.id);
+    else broadcast(row.id, { type: 'presence', people: presence(row.id) });
+  });
+});
+
+// What a collaborator is looking at: page and selected elements.
+app.post('/api/designs/:id/cursor', auth, (req, res) => {
+  const room = rooms.get(req.params.id);
+  const c = room?.get(String(req.body?.client || ''));
+  if (c && c.user.id === req.user.id) {
+    c.cursor = { page: Number(req.body.page) || 0, selected: Array.isArray(req.body.selected) ? req.body.selected.slice(0, 50) : [] };
+    broadcast(req.params.id, { type: 'presence', people: presence(req.params.id) });
+  }
+  res.json({ ok: true });
+});
+
 app.post('/api/designs/:id/duplicate', auth, (req, res) => {
-  const row = ownDesign(req, res);
+  const row = designAccess(req, res, 'view');
   if (!row) return;
   const designId = id();
   const t = now();

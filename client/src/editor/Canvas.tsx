@@ -11,6 +11,7 @@ import { ContextMenu } from './ContextMenu';
 import { useUi } from '../store/ui';
 import { CommentBadge } from './CollabPanels';
 import { stylePatch } from '../lib/style';
+import { RemoteSelections } from './Presence';
 
 const EMPTY: string[] = [];
 const NO_GUIDES = { x: [] as number[], y: [] as number[] };
@@ -556,6 +557,7 @@ function PageFrame({ index, zoom, onMenu }: { index: number; zoom: number; onMen
             )}
           </div>
         )}
+        <RemoteSelections index={index} zoom={zoom} />
         {showRulers && <Rulers width={width} height={height} zoom={zoom} surface={surfaceRef} />}
         {guides.map((g, i) => (
           <div

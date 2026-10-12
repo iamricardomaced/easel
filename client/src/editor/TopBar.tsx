@@ -10,6 +10,9 @@ import { MOD } from './ContextMenu';
 import { Logo } from '../components/Logo';
 import { VersionHistory, commentOn } from './CollabPanels';
 import { FindReplace, MagicResize } from './Tools';
+import { Avatars } from './Presence';
+import { useLive } from '../lib/live';
+import type { Member, Role } from '../types';
 import { formatTime, pageSeconds } from '../lib/motion';
 import type { VideoProgress, VideoQuality } from '../lib/video';
 
@@ -99,6 +102,7 @@ export function TopBar({ saveState, onPresent }: { saveState: SaveState; onPrese
         onChange={(e) => s.setTitle(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
       />
+      <Avatars />
       <button className="rounded-md p-1.5 hover:bg-white/15" title="Comments" onClick={() => commentOn(null)}>
         <MessageSquare size={18} />
       </button>
@@ -262,48 +266,114 @@ function DownloadModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+const ROLE_LABEL: Record<Role, string> = { owner: 'Owner', edit: 'Can edit', comment: 'Can comment', view: 'Can view' };
+
 function ShareModal({ onClose }: { onClose: () => void }) {
   const designId = useEditor((s) => s.designId)!;
+  const myRole = useLive((s) => s.role);
+  const owner = myRole === 'owner';
   const [state, setState] = useState<{ token: string | null; mode: 'view' | 'template' | null } | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<Exclude<Role, 'owner'>>('edit');
   const [loading, setLoading] = useState(false);
+  const refresh = () => api.listMembers(designId).then(setMembers).catch(() => {});
   useEffect(() => {
-    api.getDesign(designId).then((d) => setState({ token: d.shareToken, mode: d.shareMode }));
-  }, [designId]);
+    if (owner) api.getDesign(designId).then((d) => setState({ token: d.shareToken, mode: d.shareMode }));
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [designId, owner]);
   const setMode = async (mode: 'view' | 'template' | null) => {
     setLoading(true);
     const r = await api.share(designId, mode);
     setState({ token: r.shareToken, mode: r.shareMode });
     setLoading(false);
   };
+  const invite = async () => {
+    try {
+      const m = await api.addMember(designId, email, role);
+      toast(`${m.name} can now ${role === 'edit' ? 'edit' : role}`);
+      setEmail('');
+      refresh();
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  };
   const link = state?.token ? `${location.origin}/s/${state.token}` : null;
   return (
-    <Modal title="Share this design" onClose={onClose} width={460}>
-      <div className="space-y-3 text-sm text-gray-800">
-        {!state ? (
-          <p>Loading…</p>
-        ) : (
-          <>
-            <label className="block">
-              Anyone with the link
-              <select disabled={loading} className="mt-1 w-full rounded-lg border px-3 py-2" value={state.mode ?? 'off'} onChange={(e) => setMode(e.target.value === 'off' ? null : (e.target.value as 'view' | 'template'))}>
-                <option value="off">No access (link off)</option>
+    <Modal title="Share this design" onClose={onClose} width={480}>
+      <div className="space-y-4 text-sm text-gray-800" onKeyDown={(e) => e.key !== 'Escape' && e.stopPropagation()}>
+        {owner && (
+          <div>
+            <div className="mb-1 font-medium">People with access</div>
+            <div className="flex gap-2">
+              <input className="min-w-0 flex-1 rounded-lg border px-3 py-2" placeholder="Add people by email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && email && invite()} data-testid="invite-email" />
+              <select className="rounded-lg border px-2" value={role} onChange={(e) => setRole(e.target.value as Exclude<Role, 'owner'>)} data-testid="invite-role">
+                <option value="edit">Can edit</option>
+                <option value="comment">Can comment</option>
                 <option value="view">Can view</option>
-                <option value="template">Can view and use as template</option>
               </select>
-            </label>
-            {link && (
-              <div className="flex gap-2">
-                <input readOnly className="flex-1 rounded-lg border bg-gray-50 px-3 py-2 text-xs" value={link} onFocus={(e) => e.target.select()} />
-                <button
-                  className="rounded-lg bg-brand px-3 py-2 font-semibold text-white"
-                  onClick={() => navigator.clipboard.writeText(link).then(() => toast('Link copied'))}
+              <button className="rounded-lg bg-brand px-3 font-semibold text-white disabled:opacity-50" disabled={!email.trim()} onClick={invite} data-testid="invite-send">
+                Invite
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="space-y-1" data-testid="members">
+          {members.map((m) => (
+            <div key={m.id} className="flex items-center gap-2 rounded-lg px-1 py-1">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">{m.name[0]?.toUpperCase()}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{m.name}</span>
+                <span className="block truncate text-xs text-gray-500">{m.email}</span>
+              </span>
+              {owner && m.role !== 'owner' ? (
+                <select
+                  className="rounded border px-1 py-0.5 text-xs"
+                  value={m.role}
+                  onChange={async (e) => {
+                    if (e.target.value === 'remove') await api.removeMember(designId, m.id);
+                    else await api.addMember(designId, m.email, e.target.value as Exclude<Role, 'owner'>);
+                    refresh();
+                  }}
                 >
-                  Copy
-                </button>
-              </div>
+                  <option value="edit">Can edit</option>
+                  <option value="comment">Can comment</option>
+                  <option value="view">Can view</option>
+                  <option value="remove">Remove</option>
+                </select>
+              ) : (
+                <span className="text-xs text-gray-500">{ROLE_LABEL[m.role]}</span>
+              )}
+            </div>
+          ))}
+        </div>
+        {owner && (
+          <div className="border-t pt-4">
+            {!state ? (
+              <p>Loading…</p>
+            ) : (
+              <>
+                <label className="block">
+                  Anyone with the link
+                  <select disabled={loading} className="mt-1 w-full rounded-lg border px-3 py-2" value={state.mode ?? 'off'} onChange={(e) => setMode(e.target.value === 'off' ? null : (e.target.value as 'view' | 'template'))}>
+                    <option value="off">No access (link off)</option>
+                    <option value="view">Can view</option>
+                    <option value="template">Can view and use as template</option>
+                  </select>
+                </label>
+                {link && (
+                  <div className="mt-2 flex gap-2">
+                    <input readOnly className="flex-1 rounded-lg border bg-gray-50 px-3 py-2 text-xs" value={link} onFocus={(e) => e.target.select()} />
+                    <button className="rounded-lg bg-brand px-3 py-2 font-semibold text-white" onClick={() => navigator.clipboard.writeText(link).then(() => toast('Link copied'))}>
+                      Copy
+                    </button>
+                  </div>
+                )}
+                <p className="mt-2 text-xs text-gray-500">People you invite see the design in “Shared with you” and edit it with you in real time. Links need no account.</p>
+              </>
             )}
-            <p className="text-xs text-gray-500">The view link always shows the latest saved version. Template links let signed-in people copy the design into their own account.</p>
-          </>
+          </div>
         )}
       </div>
     </Modal>
